@@ -5,7 +5,7 @@
 #include <string>
 
 BTree::BTree(const std::string &path, int root) : root(root) {
-    file.open(path, std::ios::in | std::ios::out | std::ios::trunc | std::ios::binary);
+    file.open(path, std::ios::in | std::ios::out | std::ios::trunc);
 }
 
 BTree::~BTree() {
@@ -13,15 +13,34 @@ BTree::~BTree() {
 }
 
 Node BTree::readNode(int record) {
-    Node p;
-    file.seekg(record * sizeof(Node));
-    file.read((char *) &p, sizeof(Node));
+    std::string line(RECORD_SIZE, ' ');
+    file.seekg(record * RECORD_SIZE);
+    file.read(&line[0], RECORD_SIZE);
+
+    std::istringstream iss(line);
+    Node p{};
+    iss >> p.n;
+    for (int i = 0; i <= m; i++) iss >> p.K[i];
+    for (int i = 0; i <= m; i++) iss >> p.A[i];
     return p;
 }
 
 void BTree::writeNode(int record, const Node &p) {
-    file.seekp(record * sizeof(Node));
-    file.write((const char *) &p, sizeof(Node));
+    std::ostringstream oss;
+    oss << p.n;
+    for (int i = 0; i <= m; i++) oss << " " << p.K[i];
+    for (int i = 0; i <= m; i++) oss << " " << p.A[i];
+    std::string line = oss.str();
+
+    // Pad or truncate to RECORD_SIZE - 1 so every line ends with '\n' at the
+    // same offset — required for seek-by-record-number to land on a record
+    // boundary.
+    line.resize(RECORD_SIZE - 1, ' ');
+    line.push_back('\n');
+
+    file.seekp(record * RECORD_SIZE);
+    file.write(line.data(), RECORD_SIZE);
+    file.flush();
 }
 
 // Expected format (blank lines and lines starting with '#' are ignored):
