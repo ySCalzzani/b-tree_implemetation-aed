@@ -18,6 +18,7 @@ public:
     ~BTree();
 
     void writeNode(int record, const Node &p);
+    void loadFromFile(const std::string &path);
     SearchResult mSearch(int x);
 };
 

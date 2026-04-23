@@ -1,0 +1,18 @@
+# B-Tree mockup data — sample from the lecture slides
+# Order m = 3 (see src/node.h).
+#
+# Format:
+#   root <record>
+#   <record> <n> <A[0]> <K[1]> <A[1]> ... <K[n]> <A[n]>
+#
+# Notes:
+#   - Record 0 is reserved (unused slot).
+#   - A pointer value of 0 means "no child".
+
+root 1
+
+1  2  2  20 3  40 4
+2  2  0  10 0  15 0
+3  2  0  25 0  30 5
+4  2  0  45 0  50 0
+5  1  0  35 0
