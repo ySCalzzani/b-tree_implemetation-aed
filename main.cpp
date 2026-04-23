@@ -67,7 +67,7 @@ resultadoBusca mSearch(fstream &f, int T, int x){
 int main(){
     no p;
 
-    fstream arvoreB("arvoreB.dat", ios::in | ios::out | ios::trunc | ios::binary);
+    fstream arvoreB("tmp/arvoreB.dat", ios::in | ios::out | ios::trunc | ios::binary);
 
     // escreve registro 0 (c/ lixo)
     escreva(arvoreB, 0, p);
