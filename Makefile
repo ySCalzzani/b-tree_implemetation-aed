@@ -25,8 +25,15 @@ OBJ      := $(SRC:.cpp=.o)
 # Runtime directory for the on-disk B-Tree file (tmp/btree.dat).
 TMP_DIR  := tmp
 
+# Python tooling for the analysis dashboard.
+VENV     := .venv
+PYTHON   := $(VENV)/bin/python
+PIP      := $(VENV)/bin/pip
+PY_DIR   := src/python
+REQS     := requirements.txt
+
 # Targets that don't produce a file with the same name.
-.PHONY: all run clean
+.PHONY: all run clean venv dashboard clean-venv
 
 # Default target.
 all: $(TARGET)
@@ -52,3 +59,26 @@ $(TMP_DIR):
 clean:
 	rm -f $(TARGET) $(OBJ)
 	rm -rf $(TMP_DIR)
+
+# Create the venv and install pinned deps. The stamp file is touched on a
+# successful install so re-running `make venv` is a no-op until requirements
+# change.
+$(VENV)/.installed: $(REQS)
+	python3 -m venv $(VENV)
+	$(PIP) install --upgrade pip
+	$(PIP) install -r $(REQS)
+	touch $@
+
+venv: $(VENV)/.installed
+
+# Render the analysis dashboard. Requires that the binary has been run at
+# least once so tmp/btree.dat exists.
+dashboard: $(TARGET) venv | $(TMP_DIR)
+	@if [ ! -f $(TMP_DIR)/btree.dat ]; then \
+		echo "Run ./main.exe first to populate $(TMP_DIR)/btree.dat"; \
+		exit 1; \
+	fi
+	$(PYTHON) $(PY_DIR)/dashboard.py
+
+clean-venv:
+	rm -rf $(VENV)

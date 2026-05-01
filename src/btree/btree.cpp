@@ -4,7 +4,6 @@
 #include <sstream>
 #include <string>
 
-// TO ADD: Add line 0 with metadata
 BTree::BTree(const std::string &path, int root) : root(root) {
     file.open(path, std::ios::in | std::ios::out | std::ios::trunc);
 }
@@ -47,18 +46,36 @@ void BTree::writeNode(int record, const Node &p) {
     file.flush();
 }
 
+// Record 0 is reserved as a self-describing header. Writing it makes the .dat
+// file readable by any client (including the Python dashboard) without
+// out-of-band knowledge of m or RECORD_SIZE.
+void BTree::writeMetadata(int nodeCount) {
+    std::ostringstream oss;
+    oss << "META m=" << m
+        << " root=" << root
+        << " nodes=" << nodeCount
+        << " record_size=" << RECORD_SIZE;
+    std::string line = oss.str();
+    line.resize(RECORD_SIZE - 1, ' ');
+    line.push_back('\n');
+
+    file.seekp(0);
+    file.write(line.data(), RECORD_SIZE);
+    file.flush();
+}
+
 // Expected format (blank lines and lines starting with '#' are ignored):
 //   root <record>
 //   <record> <n> <A[0]> <K[1]> <A[1]> ... <K[n]> <A[n]>
 void BTree::loadFromFile(const std::string &path) {
     std::ifstream in(path);
 
-    // Record 0 is reserved (pointer value 0 means "no child"), so we still
-    // write a zeroed Node there to make the first real record land at offset
-    // sizeof(Node) rather than 0.
+    // Placeholder at record 0 so seeks into higher records have valid file
+    // structure beneath them; overwritten with real metadata at end of parse.
     Node empty{};
     writeNode(0, empty);
 
+    int nodeCount = 0;
     std::string line;
     while (std::getline(in, line)) {
         // Skip blank lines and comments. find_first_not_of locates the first
@@ -87,15 +104,20 @@ void BTree::loadFromFile(const std::string &path) {
             iss >> p.K[k] >> p.A[k];
         }
         writeNode(record, p);
+        nodeCount++;
     }
+
+    writeMetadata(nodeCount);
 }
 
-std::tuple<int, int, bool> BTree::mSearch(int x) {
+std::tuple<int, int, bool, std::vector<int>> BTree::mSearch(int x) {
     int p = root;
     int q = 0;
     int i = 0;
+    std::vector<int> path;
 
     while (p != 0) {
+        path.push_back(p);
         Node current = readNode(p);
 
         current.K[0] = NEGATIVE_INFINITY;
@@ -104,12 +126,12 @@ std::tuple<int, int, bool> BTree::mSearch(int x) {
         i = findIndex(x, current);
 
         if (x == current.K[i]) {
-            return {p, i, true};
+            return {p, i, true, path};
         }
 
         q = p;
         p = current.A[i];
     }
 
-    return {q, i, false};
+    return {q, i, false, path};
 }

@@ -4,6 +4,7 @@
 #include <fstream>
 #include <string>
 #include <tuple>
+#include <vector>
 
 #include "node.h"
 
@@ -26,13 +27,16 @@ public:
 
     Node readNode(int record);
     void writeNode(int record, const Node &p);
+    void writeMetadata(int nodeCount);
 
     int getRoot() const { return root; }
 
-    // Returns (record, index, found). When found, the key sits at K[index] of
-    // the node at `record`. When not found, `record` is the leaf where the key
-    // would have been inserted and `index` is the slot it would occupy.
-    std::tuple<int, int, bool> mSearch(int x);
+    // Returns (record, index, found, path). When found, the key sits at
+    // K[index] of the node at `record`. When not found, `record` is the leaf
+    // where the key would have been inserted and `index` is the slot it would
+    // occupy. `path` is the sequence of records visited from root to where
+    // the search terminated — used by the dashboard to highlight the route.
+    std::tuple<int, int, bool, std::vector<int>> mSearch(int x);
 };
 
 #endif

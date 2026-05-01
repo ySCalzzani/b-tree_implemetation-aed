@@ -2,5 +2,8 @@ tmp/
 **/*.o
 **/*.exe
 
+.venv/
+**/__pycache__/
+
 .vscode
 .claude
