@@ -1,9 +1,11 @@
 #include "btree.h"
 
 #include <fstream>
+#include <iostream>
 #include <sstream>
 #include <string>
 
+// TO ADD: Add line 0 with metadata
 BTree::BTree(const std::string &path, int root) : root(root) {
     file.open(path, std::ios::in | std::ios::out | std::ios::trunc);
 }
@@ -13,6 +15,8 @@ BTree::~BTree() {
 }
 
 Node BTree::readNode(int record) {
+
+    // Seek record
     std::string line(RECORD_SIZE, ' ');
     file.seekg(record * RECORD_SIZE);
     file.read(&line[0], RECORD_SIZE);
@@ -20,6 +24,7 @@ Node BTree::readNode(int record) {
     std::istringstream iss(line);
     Node p{};
     iss >> p.n;
+
     for (int i = 0; i <= m; i++) iss >> p.K[i];
     for (int i = 0; i <= m; i++) iss >> p.A[i];
     return p;
@@ -86,7 +91,7 @@ void BTree::loadFromFile(const std::string &path) {
     }
 }
 
-SearchResult BTree::mSearch(int x) {
+void BTree::mSearch(int x) {
     int p = root;
     int q = 0;
     int i = 0;
@@ -100,12 +105,25 @@ SearchResult BTree::mSearch(int x) {
         i = findIndex(x, current);
 
         if (x == current.K[i]) {
-            return SearchResult{p, i, true};
+            std::cout << "Value found: Yes" << std::endl;
+            std::cout << "Node " << p << " - K[" << i << "]" << std::endl;
+            return;
         }
 
         q = p;
         p = current.A[i];
     }
 
-    return SearchResult{q, i, false};
+    std::cout << "Value found: No" << std::endl;
+    std::cout << "Node " << q << " - K[" << i << "]" << std::endl;
+}
+
+void BTree::printNode(int record, const Node &p) {
+    std::cout << "Node " << record << " (n=" << p.n << "): ";
+    std::cout << "A[0]=" << p.A[0];
+    for (int i = 1; i <= p.n; i++) {
+        std::cout << " K[" << i << "]=" << p.K[i];
+        std::cout << " A[" << i << "]=" << p.A[i];
+    }
+    std::cout << std::endl;
 }

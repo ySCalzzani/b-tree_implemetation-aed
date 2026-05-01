@@ -23,9 +23,12 @@ public:
     BTree(const std::string &path, int root);
     ~BTree();
 
-    void writeNode(int record, const Node &p);
     void loadFromFile(const std::string &path);
-    SearchResult mSearch(int x);
+    
+    void writeNode(int record, const Node &p);
+    void printNode(int record, const Node &p);
+
+    void mSearch(int x);
 };
 
 #endif

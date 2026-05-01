@@ -10,16 +10,16 @@
 # Compiler and flags.
 #   -Wall -Wextra  enable common warnings
 #   -std=c++17     required for the class-based implementation
-#   -Isrc          headers (node.h, printer.h) are resolved from src/
+#   -Isrc/...      every directory under src/ becomes a header search path,
 CXX      := g++
-CXXFLAGS := -Wall -Wextra -std=c++17 -Isrc
+INC_DIRS := $(shell find src -type d)
+CXXFLAGS := -Wall -Wextra -std=c++17 $(addprefix -I,$(INC_DIRS))
 
 # Output binary name.
 TARGET   := main.exe
 
-# Collect every .cpp under src/ (main.cpp, node.cpp, printer.cpp, ...).
-# Adding a new .cpp to src/ is picked up automatically — no edit needed here.
-SRC      := $(wildcard src/*.cpp)
+# Recursively collect every .cpp under src/ and subdirectories.
+SRC      := $(shell find src -name '*.cpp')
 OBJ      := $(SRC:.cpp=.o)
 
 # Runtime directory for the on-disk B-Tree file (tmp/btree.dat).

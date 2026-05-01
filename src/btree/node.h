@@ -13,13 +13,6 @@ public:
     int A[m + 1];
 };
 
-class SearchResult {
-public:
-    int p;
-    int i;
-    bool found;
-};
-
 int findIndex(int x, const Node &p);
 
 #endif
