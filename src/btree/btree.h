@@ -3,6 +3,7 @@
 
 #include <fstream>
 #include <string>
+#include <tuple>
 
 #include "node.h"
 
@@ -10,8 +11,6 @@ class BTree {
 private:
     std::fstream file;
     int root;
-
-    Node readNode(int record);
 
 public:
     // One node per text line: (2m+3) ints, single-space separated, padded
@@ -24,11 +23,16 @@ public:
     ~BTree();
 
     void loadFromFile(const std::string &path);
-    
-    void writeNode(int record, const Node &p);
-    void printNode(int record, const Node &p);
 
-    void mSearch(int x);
+    Node readNode(int record);
+    void writeNode(int record, const Node &p);
+
+    int getRoot() const { return root; }
+
+    // Returns (record, index, found). When found, the key sits at K[index] of
+    // the node at `record`. When not found, `record` is the leaf where the key
+    // would have been inserted and `index` is the slot it would occupy.
+    std::tuple<int, int, bool> mSearch(int x);
 };
 
 #endif

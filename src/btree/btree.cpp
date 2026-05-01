@@ -1,7 +1,6 @@
 #include "btree.h"
 
 #include <fstream>
-#include <iostream>
 #include <sstream>
 #include <string>
 
@@ -91,7 +90,7 @@ void BTree::loadFromFile(const std::string &path) {
     }
 }
 
-void BTree::mSearch(int x) {
+std::tuple<int, int, bool> BTree::mSearch(int x) {
     int p = root;
     int q = 0;
     int i = 0;
@@ -105,25 +104,12 @@ void BTree::mSearch(int x) {
         i = findIndex(x, current);
 
         if (x == current.K[i]) {
-            std::cout << "Value found: Yes" << std::endl;
-            std::cout << "Node " << p << " - K[" << i << "]" << std::endl;
-            return;
+            return {p, i, true};
         }
 
         q = p;
         p = current.A[i];
     }
 
-    std::cout << "Value found: No" << std::endl;
-    std::cout << "Node " << q << " - K[" << i << "]" << std::endl;
-}
-
-void BTree::printNode(int record, const Node &p) {
-    std::cout << "Node " << record << " (n=" << p.n << "): ";
-    std::cout << "A[0]=" << p.A[0];
-    for (int i = 1; i <= p.n; i++) {
-        std::cout << " K[" << i << "]=" << p.K[i];
-        std::cout << " A[" << i << "]=" << p.A[i];
-    }
-    std::cout << std::endl;
+    return {q, i, false};
 }
