@@ -1,3 +1,6 @@
 tmp/
 **/*.o
 **/*.exe
+
+.vscode
+.claude
