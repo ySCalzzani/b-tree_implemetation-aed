@@ -1,0 +1,13 @@
+# After remove 40 (slide 119): e underflows and merges with left sibling d
+# (pulling 30 down) -> [10,30]. That leaves b empty; b's sibling c cannot lend,
+# so b and c merge pulling 50 down from the root a. The root becomes empty and
+# is discarded, so the merged node becomes the new root.
+#
+#                    [50,75]                        new root
+#                  /    |    \
+#            [10,30] [60,70] [80]
+root 2
+2  2  5  50 6  75 8
+5  2  0  10 0  30 0
+6  2  0  60 0  70 0
+8  1  0  80 0

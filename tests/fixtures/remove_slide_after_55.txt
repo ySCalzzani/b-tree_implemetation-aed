@@ -1,0 +1,17 @@
+# After remove 55 (slide 111): f underflows; right sibling g has only the
+# minimum, so f and g merge, pulling key 60 down from parent c. c drops to one
+# key [75] with children f=[60,70] and h=[80]. (Old node g is abandoned.)
+#
+#                       [50]
+#                     /      \
+#                 [30]        [75]
+#                /    \      /    \
+#            [10]   [40] [60,70]  [80]
+root 1
+1  1  2  50 3
+2  1  4  30 5
+3  1  6  75 8
+4  1  0  10 0
+5  1  0  40 0
+6  2  0  60 0  70 0
+8  1  0  80 0

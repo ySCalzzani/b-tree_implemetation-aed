@@ -39,22 +39,30 @@ The program populates a sample B-Tree and enters an interactive prompt; type a n
 
 ## Tests
 
-`make test` builds and runs `tests/test_btree.cpp`, which exercises `insert()`
-and `search()` against mock data.
+`make test` builds and runs `tests/test_btree.cpp`, which exercises `search()`,
+`insert()` and `remove()`. The cases are the worked examples from the lecture
+slides (`AED-03-Arvores-B.pdf`, order m=3):
 
-Each test describes a tree in a readable text fixture (`tests/fixtures/*.txt`)
-using the format:
+- **search** — the slide-60 B-tree, hits and misses at every level;
+- **insert** — insert X=55 (leaf split + median promoted into the parent);
+- **remove** — the running sequence 58, 65, 55, 40, which covers a simple leaf
+  delete, borrowing from a sibling, merging, and a cascading merge that
+  collapses the root.
+
+Each test describes a tree in a readable text fixture (`tests/fixtures/*.txt`):
 
 ```
 root <id>
 <id> <numKeys> <A[0]> <K[1]> <A[1]> ... <K[numKeys]> <A[numKeys]>
 ```
 
-`BTree::loadFromFile()` builds a tree straight from such a file. An insert test
-loads a *sample* tree, runs `insert()`, then compares the result **record by
-record** against the expected *final* tree (also a fixture). Each case runs in a
-forked child, so a crashing stub is reported as a single `FAIL` rather than
-aborting the suite.
+`BTree::loadFromFile()` builds a tree straight from such a file. A case loads a
+*before* tree, runs the operation, then compares the result against the
+expected *final* tree. The comparison is **logical**: it walks both trees from
+the root, comparing each node's keys and the subtree shape, ignoring physical
+record ids and nodes abandoned on disk. Each case runs in a forked child, so a
+crashing stub is reported as a single `FAIL` rather than aborting the suite.
 
-Because `allocateNode()` and `split()` are still stubs, the empty-tree and
-split cases are expected to **fail** — their diffs are the spec for that work.
+Because `allocateNode()`/`split()` are still stubs and `remove()` is
+unimplemented, the split, empty-tree and all remove cases are expected to
+**fail** — their diffs are the spec for that work.

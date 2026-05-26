@@ -1,0 +1,19 @@
+# Insert X=55, after (slide 71). Order m=3.
+#
+# Leaf g=[45,50] overflows on 55; median 50 is promoted into parent c, and g
+# splits into [45] and a new node [55]. c has room, so no further split.
+#
+#                       [30]                          a (root)
+#                     /      \
+#                 [20]        [40,50]                 b   c
+#                /    \      /   |    \
+#          [10,15] [25] [35,38] [45] [55]             d  e  f  g  h
+root 1
+1  1  2  30 3
+2  1  4  20 5
+3  2  6  40 7  50 8
+4  2  0  10 0  15 0
+5  1  0  25 0
+6  2  0  35 0  38 0
+7  1  0  45 0
+8  1  0  55 0

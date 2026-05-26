@@ -1,0 +1,22 @@
+# Slide-60 B-tree (order m=3). Used by the search tests. Also the "before"
+# tree for the insert X=55 example.
+#
+# Format (blank lines and '#' comments ignored):
+#   root <id>
+#   <id> <numKeys> <A[0]> <K[1]> <A[1]> [<K[2]> <A[2]> ...]
+#
+#                       [30]                      a (root)
+#                     /      \
+#                 [20]        [40]                b   c
+#                /    \       /    \
+#          [10,15]  [25] [35,38]  [45,50]         d  e  f  g
+#
+# ids:  a=1  b=2  c=3  d=4  e=5  f=6  g=7
+root 1
+1  1  2  30 3
+2  1  4  20 5
+3  1  6  40 7
+4  2  0  10 0  15 0
+5  1  0  25 0
+6  2  0  35 0  38 0
+7  2  0  45 0  50 0
