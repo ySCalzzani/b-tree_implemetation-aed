@@ -22,7 +22,12 @@ HEADERS  := $(wildcard src/*.h)
 
 TMP_DIR  := tmp
 
-.PHONY: all run clean
+# Mock-data test harness (header-only BTree, so it builds standalone and never
+# links src/main.o). Run with `make test`.
+TEST_SRC := tests/test_btree.cpp
+TEST_BIN := $(TMP_DIR)/test_btree.exe
+
+.PHONY: all run test clean
 
 all: $(TARGET)
 
@@ -34,6 +39,10 @@ $(TARGET): $(OBJ)
 
 run: $(TARGET) | $(TMP_DIR)
 	./$(TARGET)
+
+test: $(TEST_SRC) $(HEADERS) | $(TMP_DIR)
+	$(CXX) $(CXXFLAGS) -o $(TEST_BIN) $(TEST_SRC)
+	./$(TEST_BIN)
 
 $(TMP_DIR):
 	mkdir -p $(TMP_DIR)

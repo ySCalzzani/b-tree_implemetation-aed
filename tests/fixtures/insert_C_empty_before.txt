@@ -1,0 +1,3 @@
+# Case C — insert into an empty tree (RED until allocateNode() is implemented).
+# No record lines: only the header is written, with rootID = 0.
+root 0

@@ -1,0 +1,4 @@
+# Case C — expected tree after insert(50) into an empty tree.
+# Spec: the first allocated node must land at record 1.
+root 1
+1  1  0  50 0

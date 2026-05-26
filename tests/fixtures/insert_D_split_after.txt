@@ -1,0 +1,13 @@
+# Case D — expected tree after insert(30) splits the full root leaf.
+#
+# Median 20 is promoted into a brand-new root; [10] and [30] become its leaves.
+# Allocation spec (exact-record compare depends on it): the new right sibling
+# takes the next free record (2), then the new root takes the next (3).
+#
+#              [ 20 ]            (record 3, new root)
+#             /      \
+#         [10]        [30]       (records 1 and 2, leaves)
+root 3
+1  1  0  10 0
+2  1  0  30 0
+3  1  1  20 2

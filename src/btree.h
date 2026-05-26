@@ -3,6 +3,7 @@
 
 #include <string>
 #include <fstream>
+#include <sstream>
 #include <vector>
 #include <iostream>
 #include "node.h"
@@ -31,6 +32,7 @@ public:
     void insert(int key);
     void remove(int key);
     bool search(int key);
+    void loadFromFile(const std::string& path);
     DiskManager& getDiskManager() { return disk; }
 };
 
@@ -177,6 +179,58 @@ void BTree<M>::split(std::vector<int>& path) {
 template <int M>
 void BTree<M>::remove(int key) {
     // Remoção de chaves
+}
+
+/* ----------------------------------------------------------------------------
+* loadFromFile
+* Carrega uma árvore B já montada a partir de um arquivo de texto (mock).
+* Útil para testes: descreve a árvore esperada de forma legível em vez de
+* construí-la por sucessivas inserções.
+*
+* Formato (linhas em branco e linhas iniciadas por '#' são ignoradas):
+*   root <id>
+*   <id> <numKeys> <A[0]> <K[1]> <A[1]> ... <K[numKeys]> <A[numKeys]>
+*
+* O registro 0 é o cabeçalho: A[0] guarda o id da raiz (ver construtor).
+* ------------------------------------------------------------------------- */
+template <int M>
+void BTree<M>::loadFromFile(const std::string& path) {
+    std::ifstream in(path);
+
+    int newRoot = 0;
+    std::string line;
+    while (std::getline(in, line)) {
+        // Ignora linhas em branco e comentários. find_first_not_of localiza o
+        // primeiro caractere não-branco; npos => linha só com espaços.
+        std::size_t start = line.find_first_not_of(" \t");
+        if (start == std::string::npos || line[start] == '#') continue;
+
+        std::istringstream iss(line);
+        std::string first;
+        iss >> first;
+
+        // "root <id>" define qual registro é a raiz da árvore.
+        if (first == "root") {
+            iss >> newRoot;
+            continue;
+        }
+
+        // Caso contrário, é uma linha de registro: id, numKeys, A[0] e então
+        // numKeys pares de (K[i], A[i]).
+        int id = std::stoi(first);
+        BTreeNode<M> node;  // zera campos via construtor
+        iss >> node.numKeys >> node.A[0];
+        for (int k = 1; k <= node.numKeys; k++) {
+            iss >> node.K[k] >> node.A[k];
+        }
+        writeNode(id, node);
+    }
+
+    // Cabeçalho (registro 0): A[0] aponta para a raiz.
+    BTreeNode<M> header;
+    header.A[0] = newRoot;
+    writeNode(0, header);
+    rootID = newRoot;
 }
 
 #endif

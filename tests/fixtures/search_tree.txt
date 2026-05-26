@@ -1,0 +1,17 @@
+# Valid order-3 B-Tree (max 2 keys per node) used by the search tests.
+#
+# Format (blank lines and '#' comments are ignored):
+#   root <id>
+#   <id> <numKeys> <A[0]> <K[1]> <A[1]> [<K[2]> <A[2]> ...]
+#
+# Invariant: internal nodes have every child pointer set; leaves have all
+# child pointers = 0 (search() treats A[0]==0 as "leaf").
+#
+#                    [ 20 | 40 ]                (record 1, root)
+#                   /     |     \
+#            [10|15]   [25|30]   [45|50]         (records 2, 3, 4 — leaves)
+root 1
+1  2  2  20 3  40 4
+2  2  0  10 0  15 0
+3  2  0  25 0  30 0
+4  2  0  45 0  50 0

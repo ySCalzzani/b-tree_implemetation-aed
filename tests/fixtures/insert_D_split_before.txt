@@ -1,0 +1,4 @@
+# Case D — leaf/root split (RED until split() is implemented).
+# Root leaf already holds [10, 20]; inserting 30 overflows it (numKeys == M).
+root 1
+1  2  0  10 0  20 0

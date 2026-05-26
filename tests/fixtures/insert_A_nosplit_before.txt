@@ -1,0 +1,4 @@
+# Case A — insert without split (passes today).
+# Root leaf with a single key; inserting a second key just sorts in place.
+root 1
+1  1  0  10 0

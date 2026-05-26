@@ -1,0 +1,4 @@
+# Case B — insert of an already-present key (passes today).
+# Root leaf holding [10, 20]; inserting 10 must be a no-op.
+root 1
+1  2  0  10 0  20 0
