@@ -44,6 +44,11 @@ public:
     bool search(int key);
     void loadFromFile(const std::string& path);
     DiskManager& getDiskManager() { return disk; }
+
+    // Acessores de leitura para o módulo de visualização (src/display/).
+    // A BTree não imprime nada; apenas expõe a estrutura para percorrê-la.
+    int getRoot() const { return rootID; }
+    BTreeNode<M> getNode(int id) { BTreeNode<M> n; readNode(id, n); return n; }
 };
 
 /* ----------------------------------------------------------------------------

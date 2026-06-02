@@ -1,10 +1,12 @@
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
 
 #include "btree.h"
+#include "display/display.h"
 
 /* ----------------------------------------------------------------------------
  * runExperiment
@@ -49,52 +51,128 @@ void runExperiment(int numKeys, bool sequential) {
 }
 
 void exibirMenu() {
-    std::cout << "\n=====================================\n";
+    std::cout << "=====================================\n";
     std::cout << "               ARVORE B                \n";
     std::cout << "=====================================\n";
     std::cout << "1. Inserir chave\n";
-    std::cout << "2. Remover chave (A implementar)\n";
-    std::cout << "3. Buscar chave (A implementar)\n";
-    std::cout << "4. Imprimir arvore (A implementar)\n";
+    std::cout << "2. Remover chave\n";
+    std::cout << "3. Buscar chave\n";
+    std::cout << "4. Imprimir arvore\n";
     std::cout << "5. Estatisticas de I/O\n";
     std::cout << "0. Voltar / Sair\n";
     std::cout << "Escolha uma opcao: ";
 }
 
+/* ----------------------------------------------------------------------------
+* renderTela
+* Desenha a tela "dashboard": menu fixo no topo e, abaixo, uma regiao com o
+* resultado da ultima acao. O cursor e devolvido para o prompt do menu (via
+* ANSI \033[s salvar / \033[u restaurar), de modo que o usuario digita logo
+* abaixo do menu enquanto o resultado permanece visivel na regiao de baixo.
+* ------------------------------------------------------------------------- */
+void renderTela(const std::string& resultado) {
+    clearScreen();
+    exibirMenu();
+    std::cout << "\033[s";  // salva a posicao do cursor (no prompt do menu)
+
+    std::cout << "\n\n+============== RESULTADO ==============+\n";
+    std::cout << (resultado.empty() ? "(nenhuma acao ainda)\n" : resultado);
+    std::cout << "+======================================+\n";
+
+    std::cout << "\033[u";  // devolve o cursor para o prompt
+    std::cout.flush();
+}
+
+/* ----------------------------------------------------------------------------
+* lerChave
+* Redesenha o menu limpo, ecoa a opcao escolhida e mostra um sub-prompt para
+* o usuario digitar a chave, sem sujar a regiao de resultado.
+* ------------------------------------------------------------------------- */
+int lerChave(int opcao, const std::string& label) {
+    clearScreen();
+    exibirMenu();
+    std::cout << opcao << "\n\n" << label;
+    int v;
+    std::cin >> v;
+    return v;
+}
+
+// Captura as duas views da arvore (indentada + por nivel) numa string,
+// redirecionando temporariamente o std::cout das funcoes de display.
+template <int M>
+std::string capturarArvore(BTree<M>& tree) {
+    std::ostringstream oss;
+    std::streambuf* antigo = std::cout.rdbuf(oss.rdbuf());
+
+    std::cout << "--- Arvore (indentada) ---\n";
+    displayTree(tree);
+    std::cout << "\n--- Arvore (por nivel) ---\n";
+    displayLevelOrder(tree);
+
+    std::cout.rdbuf(antigo);
+    return oss.str();
+}
+
+template <int M>
+std::string capturarBusca(BTree<M>& tree, int chave) {
+    std::ostringstream oss;
+    std::streambuf* antigo = std::cout.rdbuf(oss.rdbuf());
+    displaySearchResult(tree, chave);
+    std::cout.rdbuf(antigo);
+    return oss.str();
+}
+
+template <int M>
+std::string capturarStats(BTree<M>& tree) {
+    std::ostringstream oss;
+    oss << "--- Estatisticas do Disco ---\n";
+    oss << "Leituras (I/O): " << tree.getDiskManager().getReadCount() << "\n";
+    oss << "Escritas (I/O): " << tree.getDiskManager().getWriteCount() << "\n";
+    oss << "Tamanho do arq: " << tree.getDiskManager().getFileSize() << " bytes\n";
+    return oss.str();
+}
+
 template <int M>
 void iniciarMenu() {
     std::string filename = "tmp/interactive_btree_m" + std::to_string(M) + ".dat";
-    BTree<M> tree(filename); 
-    
+    BTree<M> tree(filename);
+
     int opcao, chave;
+    std::string resultado;
 
     do {
-        exibirMenu();
+        renderTela(resultado);
         std::cin >> opcao;
 
         switch (opcao) {
             case 1:
-                std::cout << "Chave para inserir: ";
-                std::cin >> chave;
+                chave = lerChave(1, "Chave para inserir: ");
                 tree.insert(chave);
-                std::cout << "Chave inserida!\n";
+                resultado = "Chave " + std::to_string(chave) + " inserida.\n\n"
+                          + capturarArvore(tree);
                 break;
             case 2:
-                std::cout << "Chave para remover: ";
-                std::cin >> chave;
+                chave = lerChave(2, "Chave para remover: ");
                 tree.remove(chave);
+                resultado = "Chave " + std::to_string(chave) + " removida.\n\n"
+                          + capturarArvore(tree);
+                break;
+            case 3:
+                chave = lerChave(3, "Chave para buscar: ");
+                resultado = capturarBusca(tree, chave) + "\n" + capturarArvore(tree);
+                break;
+            case 4:
+                resultado = capturarArvore(tree);
                 break;
             case 5:
-                std::cout << "\n--- Estatisticas do Disco ---\n";
-                std::cout << "Leituras (I/O): " << tree.getDiskManager().getReadCount() << "\n";
-                std::cout << "Escritas (I/O): " << tree.getDiskManager().getWriteCount() << "\n";
-                std::cout << "Tamanho do arq: " << tree.getDiskManager().getFileSize() << " bytes\n";
+                resultado = capturarStats(tree);
                 break;
             case 0:
+                clearScreen();
                 std::cout << "Saindo...\n";
                 break;
             default:
-                if(opcao != 3 && opcao != 4) std::cout << "Opcao invalida!\n";
+                resultado = "Opcao invalida!";
         }
     } while (opcao != 0);
 }

@@ -18,7 +18,7 @@ TARGET   := main.exe
 
 SRC      := $(wildcard src/*.cpp)
 OBJ      := $(SRC:.cpp=.o)
-HEADERS  := $(wildcard src/*.h)
+HEADERS  := $(wildcard src/*.h) $(wildcard src/display/*.h)
 
 TMP_DIR  := tmp
 
