@@ -1,0 +1,20 @@
+# Cascading split — before. Order m=3.
+#
+# Internal node b is already full (2 keys). Inserting 28 overflows leaf e,
+# promoting 28 into b; b then overflows too and splits, promoting 28 again
+# into the root. Exercises the recursive split() path (>1 level).
+#
+#                       [50]                        a (root)
+#                     /      \
+#               [20,35]       [70]                  b        c
+#              /   |   \      /   \
+#       [10,15] [25,30] [38,40] [60] [80]           d   e   f   g  h
+root 1
+1  1  2  50 3
+2  2  4  20 5  35 6
+3  1  7  70 8
+4  2  0  10 0  15 0
+5  2  0  25 0  30 0
+6  2  0  38 0  40 0
+7  1  0  60 0
+8  1  0  80 0

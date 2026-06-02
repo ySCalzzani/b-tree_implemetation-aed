@@ -1,0 +1,21 @@
+# Borrow-from-LEFT setup — before. Order m=3.
+#
+# Removing 80 empties the rightmost leaf ch under c. Its only candidate lender
+# is the LEFT sibling cg=[55,60] (the right side does not exist), so the borrow
+# must come from the left. Exercises borrowFromLeft().
+#
+#                       [30]                        a (root)
+#                     /      \
+#               [10,20]       [50,70]               b        c
+#              /   |   \      /   |    \
+#           [5] [15] [25] [40] [55,60] [80]         leaves
+root 1
+1  1  2  30 3
+2  2  4  10 5  20 6
+3  2  7  50 8  70 9
+4  1  0  5 0
+5  1  0  15 0
+6  1  0  25 0
+7  1  0  40 0
+8  2  0  55 0  60 0
+9  1  0  80 0

@@ -1,0 +1,20 @@
+# Borrow-from-LEFT — after remove(80). Order m=3.
+#
+# ch underflows; left sibling cg=[55,60] lends: parent key 70 drops into ch and
+# 60 (max of cg) rises into the parent. c becomes [50,60].
+#
+#                       [30]
+#                     /      \
+#               [10,20]       [50,60]
+#              /   |   \      /   |    \
+#           [5] [15] [25] [40] [55] [70]
+root 1
+1  1  2  30 3
+2  2  4  10 5  20 6
+3  2  7  50 8  60 9
+4  1  0  5 0
+5  1  0  15 0
+6  1  0  25 0
+7  1  0  40 0
+8  1  0  55 0
+9  1  0  70 0

@@ -1,0 +1,4 @@
+# Order m=5 root-leaf split — before.
+# Root leaf holds 4 keys (M-1); inserting 25 overflows it (numKeys == M == 5).
+root 1
+1  4  0  10 0  20 0  30 0  40 0

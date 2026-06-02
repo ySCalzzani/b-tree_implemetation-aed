@@ -1,0 +1,4 @@
+# Remove the last remaining key — before. Order m=3.
+# A lone root leaf holding a single key.
+root 1
+1  1  0  42 0

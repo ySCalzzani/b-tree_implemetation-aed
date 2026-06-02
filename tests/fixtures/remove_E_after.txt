@@ -1,0 +1,22 @@
+# Remove an INTERNAL key — after remove(50) from remove_slide_start.txt.
+# Order m=3.
+#
+# 50 lives in the root (internal). Its left child [30] has only the minimum,
+# but the right child [60,70] can spare a key, so 50 is replaced by its
+# in-order successor (55, the smallest key in the right subtree) and 55 is then
+# removed from leaf f=[55,58], leaving [58]. Exercises getSuccessorKey().
+#
+#                       [55]
+#                     /      \
+#                 [30]        [60,70]
+#                /    \      /   |    \
+#            [10]   [40]  [58]  [65] [75,80]
+root 1
+1  1  2  55 3
+2  1  4  30 5
+3  2  6  60 7  70 8
+4  1  0  10 0
+5  1  0  40 0
+6  1  0  58 0
+7  1  0  65 0
+8  2  0  75 0  80 0

@@ -1,0 +1,22 @@
+# Cascading split — after insert(28). Order m=3.
+#
+# Leaf e=[25,30] overflows -> 28 promoted into b. b=[20,35] then becomes
+# [20,28,35] and overflows -> 28 promoted into root. Tree grows one level on
+# the left spine; root ends as [28,50] with three children.
+#
+#                     [28,50]                       a (root)
+#                   /   |    \
+#              [20]   [35]    [70]                   b'  b''  c
+#             /   \   /   \   /   \
+#       [10,15] [25] [30] [38,40] [60] [80]
+root 1
+1  2  2  28 3  50 4
+2  1  5  20 6
+3  1  7  35 8
+4  1  9  70 10
+5  2  0  10 0  15 0
+6  1  0  25 0
+7  1  0  30 0
+8  2  0  38 0  40 0
+9  1  0  60 0
+10 1  0  80 0

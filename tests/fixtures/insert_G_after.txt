@@ -1,0 +1,11 @@
+# Order m=5 root-leaf split — after insert(25).
+# [10,20,25,30,40] overflows; mid = (M+1)/2 = 3 -> median K[3] = 25 is promoted
+# into a new root, leaving [10,20] and [30,40] as the two leaves.
+#
+#              [ 25 ]
+#             /      \
+#        [10,20]   [30,40]
+root 3
+1  2  0  10 0  20 0
+2  2  0  30 0  40 0
+3  1  1  25 2

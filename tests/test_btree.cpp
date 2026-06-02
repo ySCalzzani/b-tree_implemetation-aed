@@ -16,9 +16,10 @@
  * btree.h is header-only, so this file has its own main() and is compiled
  * standalone (it never links src/main.o). Run with `make test`.
  *
- * NOTE: insert() still depends on the stubs allocateNode()/split(), and
- * remove() is an empty stub, so most insert/remove cases are EXPECTED TO FAIL
- * until those are implemented. Their diffs/crashes are the spec for that work.
+ * search(), insert()/split() and remove() are all implemented, so every case
+ * here is expected to PASS. The op still runs in a forked child so that a
+ * regression which crashes (e.g. a bad allocateNode) surfaces as a single
+ * reported FAIL instead of aborting the whole suite.
  * ------------------------------------------------------------------------- */
 #include <iostream>
 #include <fstream>
@@ -180,41 +181,64 @@ static void runSearchTests() {
     std::remove(dat.c_str());
 
     BTree<3> t(dat);
-    t.loadFromFile(FIX + "search_slide60.txt");
+    t.loadFromFile(FIX + "search_tree.txt");
 
-    // Present keys at every level.
-    check("find 30 (root)",        t.search(30));
-    check("find 20 (internal b)",  t.search(20));
-    check("find 40 (internal c)",  t.search(40));
-    check("find 10 (leaf d)",      t.search(10));
-    check("find 25 (leaf e)",      t.search(25));
-    check("find 35 (leaf f)",      t.search(35));
-    check("find 50 (leaf g)",      t.search(50));
+    // Present keys at every level (tree from the lecture slides).
+    check("A: find 30 (root, slides)",        t.search(30));
+    check("B: find 20 (internal b, slides)",  t.search(20));
+    check("C: find 40 (internal c, slides)",  t.search(40));
+    check("D: find 10 (leaf d, slides)",      t.search(10));
+    check("E: find 25 (leaf e, slides)",      t.search(25));
+    check("F: find 35 (leaf f, slides)",      t.search(35));
+    check("G: find 50 (leaf g, slides)",      t.search(50));
 
     // Absent keys: below, above and between existing ones.
-    check("miss 5 (below all)",    !t.search(5));
-    check("miss 33 (gap)",         !t.search(33));
-    check("miss 99 (above all)",   !t.search(99));
+    check("H: miss 5 (below all, slides)",    !t.search(5));
+    check("I: miss 33 (gap, slides)",         !t.search(33));
+    check("J: miss 99 (above all, slides)",   !t.search(99));
+
+    // Empty tree: every search must miss without crashing.
+    const std::string empty = TMP + "test_search_empty.dat";
+    std::remove(empty.c_str());
+    BTree<3> e(empty);            // fresh file => rootID == 0
+    check("K: miss on empty tree",            !e.search(42));
 }
 
 static void runInsertTests() {
     std::cout << "insert():\n";
-    // Green today (no allocateNode/split needed):
-    insertCase<3>("A: no-split insert", "insert_A_nosplit_before.txt", 20, "insert_A_nosplit_after.txt");
-    insertCase<3>("B: duplicate key (no-op)", "insert_B_dup_before.txt", 10, "insert_B_dup_after.txt");
+    insertCase<3>("A: no-split insert", "insert_A_before.txt", 20, "insert_A_after.txt");
+    insertCase<3>("B: duplicate key (no-op)", "insert_B_before.txt", 10, "insert_B_after.txt");
+    insertCase<3>("C: insert into empty tree", "insert_C_before.txt", 50, "insert_C_after.txt");
+    insertCase<3>("D: root-leaf split", "insert_D_before.txt", 30, "insert_D_after.txt");
 
-    // RED until allocateNode()/split() are implemented:
-    insertCase<3>("C: insert into empty tree", "insert_C_empty_before.txt", 50, "insert_C_empty_after.txt");
-    insertCase<3>("D: root-leaf split", "insert_D_split_before.txt", 30, "insert_D_split_after.txt");
-    insertCase<3>("slide: insert 55 (split + promote)", "insert_slide55_before.txt", 55, "insert_slide55_after.txt");
+    // From the lecture slides: insert X=55 (leaf split, median promoted).
+    insertCase<3>("E: insert 55 (split + promote, slides)", "insert_E_before.txt", 55, "insert_E_after.txt");
+
+    // Cascading split: the leaf split overflows the parent, which splits too
+    // and promotes into a brand-new root (recursive split() path).
+    insertCase<3>("F: cascading split (new root)", "insert_F_before.txt", 28, "insert_F_after.txt");
+
+    // Order generality: same split logic at m=5 (mid = (M+1)/2 = 3).
+    insertCase<5>("G: m=5 root-leaf split", "insert_G_before.txt", 25, "insert_G_after.txt");
 }
 
 static void runRemoveTests() {
-    std::cout << "remove() — slide sequence (RED until remove() is implemented):\n";
-    removeCase<3>("slide: remove 58 (simple leaf)",        "remove_slide_start.txt",    58, "remove_slide_after_58.txt");
-    removeCase<3>("slide: remove 65 (borrow from sibling)", "remove_slide_after_58.txt", 65, "remove_slide_after_65.txt");
-    removeCase<3>("slide: remove 55 (merge with sibling)",  "remove_slide_after_65.txt", 55, "remove_slide_after_55.txt");
-    removeCase<3>("slide: remove 40 (cascading merge, root collapses)", "remove_slide_after_55.txt", 40, "remove_slide_after_40.txt");
+    std::cout << "remove() — slide sequence (from the lecture slides):\n";
+    removeCase<3>("A: remove 58 (simple leaf, slides)",        "remove_A_before.txt", 58, "remove_A_after.txt");
+    removeCase<3>("B: remove 65 (borrow from right, slides)",   "remove_B_before.txt", 65, "remove_B_after.txt");
+    removeCase<3>("C: remove 55 (merge with sibling, slides)",  "remove_C_before.txt", 55, "remove_C_after.txt");
+    removeCase<3>("D: remove 40 (cascading merge, root collapses, slides)", "remove_D_before.txt", 40, "remove_D_after.txt");
+
+    std::cout << "remove() — extra coverage:\n";
+    // Removing a key stored in an INTERNAL node: replace by in-order successor.
+    removeCase<3>("E: remove 50 (internal key, successor)", "remove_E_before.txt", 50, "remove_E_after.txt");
+    // Underflow fixed by borrowing from the LEFT sibling (right has none).
+    removeCase<3>("F: remove 80 (borrow from left)", "remove_F_before.txt", 80, "remove_F_after.txt");
+    // Removing the last key collapses the tree to empty.
+    removeCase<3>("G: remove 42 (last key -> empty tree)", "remove_G_before.txt", 42, "remove_G_after.txt");
+    // No-op cases must leave the tree untouched.
+    removeCase<3>("H: remove 99 (absent key, no-op)", "remove_H_before.txt", 99, "remove_H_after.txt");
+    removeCase<3>("I: remove from empty tree (no-op)", "remove_I_before.txt", 10, "remove_I_after.txt");
 }
 
 int main() {

@@ -1,0 +1,3 @@
+# Remove the last remaining key — after remove(42).
+# The root leaf empties; the tree collapses to empty (header root = 0).
+root 0
