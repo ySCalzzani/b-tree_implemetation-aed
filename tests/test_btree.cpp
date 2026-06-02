@@ -1,25 +1,26 @@
 /* ----------------------------------------------------------------------------
  * test_btree.cpp
- * Mock-data tests for BTree<M>, covering search(), insert() and remove().
+ * Testes com dados de mock para BTree<M>, cobrindo search(), insert() e remove().
  *
- * Each case describes the "before" and expected "final" tree as a readable
- * text fixture (tests/fixtures/*.txt) loaded by BTree::loadFromFile(). The
- * operation runs on the before-tree and the result is compared against the
- * final tree.
+ * Cada caso descreve a árvore "antes" e a árvore "final" esperada como um
+ * fixture de texto legível (tests/fixtures/*.txt) carregado por
+ * BTree::loadFromFile(). A operação roda sobre a árvore-antes e o resultado é
+ * comparado com a árvore final.
  *
- * Comparison is LOGICAL: we walk both trees from the root following child
- * pointers, comparing each node's key count and keys and the subtree shape.
- * Physical record ids and abandoned-on-disk nodes are ignored — the remove
- * slides explicitly leave dead nodes behind, so a byte/record compare would
- * be ill-defined.
+ * A comparação é LÓGICA: percorremos as duas árvores a partir da raiz seguindo
+ * os ponteiros de filhos, comparando a quantidade de chaves de cada nó, as
+ * chaves e o formato da subárvore. Os ids físicos dos registros e os nós
+ * abandonados no disco são ignorados — os slides de remoção deixam, de
+ * propósito, nós mortos para trás, então uma comparação byte a byte/por
+ * registro seria mal definida.
  *
- * btree.h is header-only, so this file has its own main() and is compiled
- * standalone (it never links src/main.o). Run with `make test`.
+ * btree.h é header-only, então este arquivo tem seu próprio main() e é compilado
+ * de forma independente (nunca linka src/main.o). Rode com `make test`.
  *
- * search(), insert()/split() and remove() are all implemented, so every case
- * here is expected to PASS. The op still runs in a forked child so that a
- * regression which crashes (e.g. a bad allocateNode) surfaces as a single
- * reported FAIL instead of aborting the whole suite.
+ * search(), insert()/split() e remove() estão todos implementados, então todo
+ * caso aqui deve PASSAR. A operação ainda roda em um processo filho (fork) para
+ * que uma regressão que cause crash (ex.: um allocateNode com bug) apareça como
+ * um único FAIL reportado em vez de abortar a suíte inteira.
  * ------------------------------------------------------------------------- */
 #include <iostream>
 #include <fstream>
@@ -55,15 +56,16 @@ static void readRecord(std::ifstream& f, int id, BTreeNode<M>& node) {
     f.read((char*)&node, sizeof(BTreeNode<M>));
 }
 
-/* Recursively compare the subtrees rooted at records idA / idB. A child id of
- * 0 means "no child"; both sides must agree on that. */
+/* Compara recursivamente as subárvores enraizadas nos registros idA / idB. Um
+ * id de filho igual a 0 significa "sem filho"; os dois lados precisam concordar
+ * nisso. */
 template <int M>
 static bool compareSubtree(std::ifstream& fa, int idA,
                            std::ifstream& fb, int idB,
                            std::string& msg) {
     if (idA == 0 && idB == 0) return true;
     if (idA == 0 || idB == 0) {
-        msg = "tree shape differs (one child is null, the other is not)";
+        msg = "formato da arvore difere (um filho e nulo, o outro nao)";
         return false;
     }
 
@@ -73,18 +75,18 @@ static bool compareSubtree(std::ifstream& fa, int idA,
     readRecord(fb, idB, nb);
 
     if (na.numKeys < 0 || na.numKeys > M) {
-        msg = "invalid numKeys " + std::to_string(na.numKeys) + " in result tree";
+        msg = "numKeys invalido " + std::to_string(na.numKeys) + " na arvore resultado";
         return false;
     }
     if (na.numKeys != nb.numKeys) {
-        msg = "numKeys differs: result has " + std::to_string(na.numKeys) +
-              ", expected " + std::to_string(nb.numKeys);
+        msg = "numKeys difere: resultado tem " + std::to_string(na.numKeys) +
+              ", esperado " + std::to_string(nb.numKeys);
         return false;
     }
     for (int k = 1; k <= na.numKeys; k++) {
         if (na.K[k] != nb.K[k]) {
-            msg = "key differs: result has " + std::to_string(na.K[k]) +
-                  ", expected " + std::to_string(nb.K[k]);
+            msg = "chave difere: resultado tem " + std::to_string(na.K[k]) +
+                  ", esperado " + std::to_string(nb.K[k]);
             return false;
         }
     }
@@ -94,14 +96,15 @@ static bool compareSubtree(std::ifstream& fa, int idA,
     return true;
 }
 
-/* Logical comparison of two BTree<M> data files: same keys, same shape,
- * starting from each file's root (record 0 header, A[0] = root id). */
+/* Comparação lógica de dois arquivos de dados BTree<M>: mesmas chaves, mesmo
+ * formato, partindo da raiz de cada arquivo (registro 0 = cabeçalho, A[0] = id
+ * da raiz). */
 template <int M>
 static bool compareLogical(const std::string& a, const std::string& b, std::string& msg) {
     std::ifstream fa(a, std::ios::binary);
     std::ifstream fb(b, std::ios::binary);
     if (!fa.is_open() || !fb.is_open()) {
-        msg = "could not open data file(s)";
+        msg = "nao foi possivel abrir o(s) arquivo(s) de dados";
         return false;
     }
     BTreeNode<M> ha;
@@ -111,7 +114,7 @@ static bool compareLogical(const std::string& a, const std::string& b, std::stri
     return compareSubtree<M>(fa, ha.A[0], fb, hb.A[0], msg);
 }
 
-/* Loads a fixture into a fresh .dat file and closes it (flush on destructor). */
+/* Carrega um fixture em um arquivo .dat novo e o fecha (flush no destrutor). */
 template <int M>
 static void materialize(const std::string& dat, const std::string& fixture) {
     std::remove(dat.c_str());
@@ -119,12 +122,12 @@ static void materialize(const std::string& dat, const std::string& fixture) {
     t.loadFromFile(FIX + fixture);
 }
 
-/* before fixture -> run op(tree) -> compare against the expected fixture.
+/* fixture antes -> roda op(tree) -> compara com o fixture esperado.
  *
- * The load+op runs in a forked child: insert() leans on the unimplemented
- * stubs allocateNode()/split(), and a buggy stub can crash (e.g. allocateNode
- * falling off the end -> SIGILL). Forking turns such a crash into a single
- * reported FAIL instead of aborting the whole suite. */
+ * O carregamento+op roda em um processo filho (fork): insert() depende de
+ * allocateNode()/split(), e um bug nessas funções pode causar crash (ex.:
+ * allocateNode passando do fim -> SIGILL). O fork transforma esse crash em um
+ * único FAIL reportado em vez de abortar a suíte inteira. */
 template <int M, typename Op>
 static void runCase(const std::string& name,
                     const std::string& before,
@@ -134,7 +137,7 @@ static void runCase(const std::string& name,
     const std::string expected = TMP + "test_expected.dat";
 
     std::remove(actual.c_str());
-    std::cout.flush();  // don't let the child inherit unflushed output
+    std::cout.flush();  // evita que o filho herde saida nao descarregada (flush)
 
     pid_t pid = fork();
     if (pid == 0) {
@@ -142,16 +145,16 @@ static void runCase(const std::string& name,
             BTree<M> t(actual);
             t.loadFromFile(FIX + before);
             op(t);
-        }  // destructor flushes/closes before the parent reads the file
+        }  // o destrutor faz flush/fecha antes do pai ler o arquivo
         _exit(0);
     }
 
     int status = 0;
     waitpid(pid, &status, 0);
     if (WIFSIGNALED(status)) {
-        check(name, false, "operation crashed (signal " +
+        check(name, false, "a operacao causou crash (sinal " +
                            std::to_string(WTERMSIG(status)) +
-                           ") — not implemented yet");
+                           ")");
         return;
     }
 
@@ -162,7 +165,7 @@ static void runCase(const std::string& name,
     check(name, ok, msg);
 }
 
-/* Convenience wrappers so each case reads as one line. */
+/* Wrappers de conveniência para que cada caso caiba em uma linha. */
 template <int M>
 static void insertCase(const std::string& name, const std::string& before,
                        int key, const std::string& after) {
@@ -176,78 +179,78 @@ static void removeCase(const std::string& name, const std::string& before,
 }
 
 static void runSearchTests() {
-    std::cout << "search() — slide-60 B-tree:\n";
+    std::cout << "search() — arvore B do slide 60:\n";
     const std::string dat = TMP + "test_search.dat";
     std::remove(dat.c_str());
 
     BTree<3> t(dat);
     t.loadFromFile(FIX + "search_tree.txt");
 
-    // Present keys at every level (tree from the lecture slides).
-    check("A: find 30 (root, slides)",        t.search(30));
-    check("B: find 20 (internal b, slides)",  t.search(20));
-    check("C: find 40 (internal c, slides)",  t.search(40));
-    check("D: find 10 (leaf d, slides)",      t.search(10));
-    check("E: find 25 (leaf e, slides)",      t.search(25));
-    check("F: find 35 (leaf f, slides)",      t.search(35));
-    check("G: find 50 (leaf g, slides)",      t.search(50));
+    // Chaves presentes em todos os niveis (arvore dos slides da aula).
+    check("A: acha 30 (raiz, slides)",          t.search(30));
+    check("B: acha 20 (interno b, slides)",     t.search(20));
+    check("C: acha 40 (interno c, slides)",     t.search(40));
+    check("D: acha 10 (folha d, slides)",       t.search(10));
+    check("E: acha 25 (folha e, slides)",       t.search(25));
+    check("F: acha 35 (folha f, slides)",       t.search(35));
+    check("G: acha 50 (folha g, slides)",       t.search(50));
 
-    // Absent keys: below, above and between existing ones.
-    check("H: miss 5 (below all, slides)",    !t.search(5));
-    check("I: miss 33 (gap, slides)",         !t.search(33));
-    check("J: miss 99 (above all, slides)",   !t.search(99));
+    // Chaves ausentes: abaixo, acima e entre as existentes.
+    check("H: erra 5 (abaixo de todas, slides)", !t.search(5));
+    check("I: erra 33 (lacuna, slides)",         !t.search(33));
+    check("J: erra 99 (acima de todas, slides)", !t.search(99));
 
-    // Empty tree: every search must miss without crashing.
+    // Arvore vazia: toda busca deve errar sem dar crash.
     const std::string empty = TMP + "test_search_empty.dat";
     std::remove(empty.c_str());
-    BTree<3> e(empty);            // fresh file => rootID == 0
-    check("K: miss on empty tree",            !e.search(42));
+    BTree<3> e(empty);            // arquivo novo => rootID == 0
+    check("K: erra em arvore vazia",             !e.search(42));
 }
 
 static void runInsertTests() {
     std::cout << "insert():\n";
-    insertCase<3>("A: no-split insert", "insert_A_before.txt", 20, "insert_A_after.txt");
-    insertCase<3>("B: duplicate key (no-op)", "insert_B_before.txt", 10, "insert_B_after.txt");
-    insertCase<3>("C: insert into empty tree", "insert_C_before.txt", 50, "insert_C_after.txt");
-    insertCase<3>("D: root-leaf split", "insert_D_before.txt", 30, "insert_D_after.txt");
+    insertCase<3>("A: insercao sem split", "insert_A_before.txt", 20, "insert_A_after.txt");
+    insertCase<3>("B: chave duplicada (no-op)", "insert_B_before.txt", 10, "insert_B_after.txt");
+    insertCase<3>("C: insere em arvore vazia", "insert_C_before.txt", 50, "insert_C_after.txt");
+    insertCase<3>("D: split da raiz-folha", "insert_D_before.txt", 30, "insert_D_after.txt");
 
-    // From the lecture slides: insert X=55 (leaf split, median promoted).
-    insertCase<3>("E: insert 55 (split + promote, slides)", "insert_E_before.txt", 55, "insert_E_after.txt");
+    // Dos slides da aula: insere X=55 (split da folha, mediana promovida).
+    insertCase<3>("E: insere 55 (split + promocao, slides)", "insert_E_before.txt", 55, "insert_E_after.txt");
 
-    // Cascading split: the leaf split overflows the parent, which splits too
-    // and promotes into a brand-new root (recursive split() path).
-    insertCase<3>("F: cascading split (new root)", "insert_F_before.txt", 28, "insert_F_after.txt");
+    // Split em cascata: o split da folha estoura o pai, que tambem faz split e
+    // promove para uma raiz nova em folha (caminho recursivo do split()).
+    insertCase<3>("F: split em cascata (nova raiz)", "insert_F_before.txt", 28, "insert_F_after.txt");
 
-    // Order generality: same split logic at m=5 (mid = (M+1)/2 = 3).
-    insertCase<5>("G: m=5 root-leaf split", "insert_G_before.txt", 25, "insert_G_after.txt");
+    // Generalidade da ordem: mesma logica de split com m=5 (mid = (M+1)/2 = 3).
+    insertCase<5>("G: split da raiz-folha com m=5", "insert_G_before.txt", 25, "insert_G_after.txt");
 }
 
 static void runRemoveTests() {
-    std::cout << "remove() — slide sequence (from the lecture slides):\n";
-    removeCase<3>("A: remove 58 (simple leaf, slides)",        "remove_A_before.txt", 58, "remove_A_after.txt");
-    removeCase<3>("B: remove 65 (borrow from right, slides)",   "remove_B_before.txt", 65, "remove_B_after.txt");
-    removeCase<3>("C: remove 55 (merge with sibling, slides)",  "remove_C_before.txt", 55, "remove_C_after.txt");
-    removeCase<3>("D: remove 40 (cascading merge, root collapses, slides)", "remove_D_before.txt", 40, "remove_D_after.txt");
+    std::cout << "remove() — sequencia dos slides (dos slides da aula):\n";
+    removeCase<3>("A: remove 58 (folha simples, slides)",        "remove_A_before.txt", 58, "remove_A_after.txt");
+    removeCase<3>("B: remove 65 (empresta do irmao direito, slides)",   "remove_B_before.txt", 65, "remove_B_after.txt");
+    removeCase<3>("C: remove 55 (merge com irmao, slides)",  "remove_C_before.txt", 55, "remove_C_after.txt");
+    removeCase<3>("D: remove 40 (merge em cascata, raiz colapsa, slides)", "remove_D_before.txt", 40, "remove_D_after.txt");
 
-    std::cout << "remove() — extra coverage:\n";
-    // Removing a key stored in an INTERNAL node: replace by in-order successor.
-    removeCase<3>("E: remove 50 (internal key, successor)", "remove_E_before.txt", 50, "remove_E_after.txt");
-    // Underflow fixed by borrowing from the LEFT sibling (right has none).
-    removeCase<3>("F: remove 80 (borrow from left)", "remove_F_before.txt", 80, "remove_F_after.txt");
-    // Removing the last key collapses the tree to empty.
-    removeCase<3>("G: remove 42 (last key -> empty tree)", "remove_G_before.txt", 42, "remove_G_after.txt");
-    // No-op cases must leave the tree untouched.
-    removeCase<3>("H: remove 99 (absent key, no-op)", "remove_H_before.txt", 99, "remove_H_after.txt");
-    removeCase<3>("I: remove from empty tree (no-op)", "remove_I_before.txt", 10, "remove_I_after.txt");
+    std::cout << "remove() — cobertura extra:\n";
+    // Remove uma chave armazenada em um no INTERNO: substitui pelo sucessor em ordem.
+    removeCase<3>("E: remove 50 (chave interna, sucessor)", "remove_E_before.txt", 50, "remove_E_after.txt");
+    // Underflow corrigido emprestando do irmao da ESQUERDA (o da direita nao tem).
+    removeCase<3>("F: remove 80 (empresta do irmao esquerdo)", "remove_F_before.txt", 80, "remove_F_after.txt");
+    // Remover a ultima chave colapsa a arvore para vazia.
+    removeCase<3>("G: remove 42 (ultima chave -> arvore vazia)", "remove_G_before.txt", 42, "remove_G_after.txt");
+    // Casos no-op devem deixar a arvore intacta.
+    removeCase<3>("H: remove 99 (chave ausente, no-op)", "remove_H_before.txt", 99, "remove_H_after.txt");
+    removeCase<3>("I: remove de arvore vazia (no-op)", "remove_I_before.txt", 10, "remove_I_after.txt");
 }
 
 int main() {
-    std::cout << "=== BTree mock-data tests (lecture-slide examples) ===\n";
+    std::cout << "=== Testes da BTree com dados de mock (exemplos dos slides da aula) ===\n";
     runSearchTests();
     runInsertTests();
     runRemoveTests();
 
     std::cout << "------------------------------------------------------\n";
-    std::cout << g_pass << " passed, " << g_fail << " failed\n";
+    std::cout << g_pass << " passaram, " << g_fail << " falharam\n";
     return g_fail == 0 ? 0 : 1;
 }

@@ -10,7 +10,7 @@
 #include "diskmanager.h"
 
 /* ----------------------------------------------------------------------------
-* Btree: Implementação de uma árvore B.
+* BTree: Implementação de uma árvore B.
 * ------------------------------------------------------------------------- */
 template <int M>
 class BTree {
@@ -52,7 +52,7 @@ public:
 };
 
 /* ----------------------------------------------------------------------------
-* Constructor
+* Construtor
 * - Se o arquivo não existir, cria um novo arquivo vazio.
 * - Se o arquivo existir, lê o registro 0 para carregar o ID da raiz.
 * ------------------------------------------------------------------------- */

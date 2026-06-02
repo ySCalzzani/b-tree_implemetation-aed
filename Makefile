@@ -1,16 +1,16 @@
 # ---------------------------------------------------------------------------
-# Makefile for the B-Tree implementation
+# Makefile da implementação da árvore B
 #
-# Targets:
-#   make         Build main.exe (default target).
-#   make run     Build if needed, ensure tmp/ exists, and run main.exe.
-#   make clean   Remove main.exe, object files, and tmp/.
+# Alvos:
+#   make         Compila main.exe (alvo padrão).
+#   make run     Compila se necessário, garante que tmp/ exista e roda main.exe.
+#   make clean   Remove main.exe, arquivos-objeto e tmp/.
 # ---------------------------------------------------------------------------
 
-# Compiler and flags.
-#   -Wall -Wextra  enable common warnings
-#   -std=c++17     required for the class-based implementation
-#   -Isrc/...      every directory under src/ becomes a header search path,
+# Compilador e flags.
+#   -Wall -Wextra  habilita os avisos mais comuns
+#   -std=c++17     necessário para a implementação baseada em classes
+#   -Isrc/...      cada diretório dentro de src/ vira um caminho de busca de headers,
 CXX      := g++
 CXXFLAGS := -Wall -Wextra -std=c++17 -Isrc
 
@@ -22,8 +22,8 @@ HEADERS  := $(wildcard src/*.h) $(wildcard src/display/*.h)
 
 TMP_DIR  := tmp
 
-# Mock-data test harness (header-only BTree, so it builds standalone and never
-# links src/main.o). Run with `make test`.
+# Bateria de testes com dados de mock (BTree é header-only, então compila de
+# forma independente e nunca linka src/main.o). Rode com `make test`.
 TEST_SRC := tests/test_btree.cpp
 TEST_BIN := $(TMP_DIR)/test_btree.exe
 

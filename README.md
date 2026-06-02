@@ -1,123 +1,131 @@
 # b-tree_implementation-aed
 
-B-Tree Implementation — PPGCA DCM, Algorithms and Data Structures.
+Implementação de Árvore B — PPGCA DCM, Algoritmos e Estruturas de Dados.
 
-by Caio Uehara Martins
-#TODO: Add your names here
+por Caio Uehara Martins
+#TODO: Adicione os nomes de vocês aqui
 
-## Overview
+## Visão geral
 
-A disk-oriented B-Tree implemented in C++. Nodes are stored as fixed-size records inside a binary file (`tmp/btree.dat`), and the tree operates by seeking to `record * sizeof(Node)` offsets, mimicking real-world page-based I/O.
+Uma Árvore B orientada a disco implementada em C++. Os nós são armazenados como
+registros de tamanho fixo dentro de um arquivo binário (`tmp/btree.dat`), e a
+árvore opera deslocando-se para offsets `registro * sizeof(Node)`, imitando o
+I/O baseado em páginas do mundo real.
 
-- **Programming Language:** C++17
-- **Description**: Language use for comments, descriptions and coding is English.
+- **Linguagem de programação:** C++17
+- **Descrição**: O idioma usado em comentários, descrições e no código é o português (pt-br).
 
-## Project layout
+## Estrutura do projeto
 
 ```
 .
-├── src/                 # all C++ sources and headers (main.cpp lives here)
+├── src/                 # todos os fontes e headers C++ (main.cpp fica aqui)
 ├── tests/
-│   ├── test_btree.cpp   # mock-data test harness (its own main(), built standalone)
-│   └── fixtures/        # text fixtures, one per test case (see naming below)
+│   ├── test_btree.cpp   # bateria de testes com dados de mock (main() próprio, compilado de forma independente)
+│   └── fixtures/        # fixtures de texto, um por caso de teste (ver nomenclatura abaixo)
 ├── Makefile
-└── tmp/                 # created at runtime; holds btree.dat and test data files
+└── tmp/                 # criado em tempo de execução; guarda btree.dat e os arquivos de dados dos testes
 ```
 
-Fixtures for the **state-changing** operations are named after the test case
-that uses them — `insert_<letter>_before.txt` / `insert_<letter>_after.txt` and
-`remove_<letter>_before.txt` / `remove_<letter>_after.txt`, where `<letter>` is
-the case letter (A, B, C…). `search` is read-only and has no before/after state:
-all of its cases query the same tree in a single shared `search_tree.txt`, so
-its A–K letters label the individual queries, not files. See the
-[test table](#test-cases-and-coverage) for the full list.
+Os fixtures das operações que **alteram estado** são nomeados conforme o caso de
+teste que os usa — `insert_<letra>_before.txt` / `insert_<letra>_after.txt` e
+`remove_<letra>_before.txt` / `remove_<letra>_after.txt`, onde `<letra>` é a
+letra do caso (A, B, C…). O `search` é somente leitura e não tem estado
+antes/depois: todos os seus casos consultam a mesma árvore em um único
+`search_tree.txt` compartilhado, então suas letras A–K rotulam as consultas
+individuais, não arquivos. Veja a [tabela de testes](#casos-de-teste-e-cobertura)
+para a lista completa.
 
-## Build and run
+## Compilar e rodar
 
-Requires `g++` (C++17) and `make`.
+Requer `g++` (C++17) e `make`.
 
 ```bash
-make          # build main.exe
-make run      # build (if needed) and run
-make test     # build and run the mock-data test harness
-make clean    # remove binary, objects, and tmp/
+make          # compila main.exe
+make run      # compila (se necessário) e roda
+make test     # compila e roda a bateria de testes com dados de mock
+make clean    # remove o binário, os objetos e tmp/
 ```
 
-`make run` creates `tmp/` automatically.
+`make run` cria `tmp/` automaticamente.
 
-The program populates a sample B-Tree and enters an interactive prompt; type a number to search, or Ctrl-C to exit.
+O programa popula uma Árvore B de exemplo e entra em um prompt interativo; digite
+um número para buscar, ou Ctrl-C para sair.
 
-## Tests
+## Testes
 
-`make test` builds and runs `tests/test_btree.cpp`, which exercises `search()`,
-`insert()` and `remove()`. Most cases are the worked examples from the lecture
-slides (`AED-03-Arvores-B.pdf`, order m=3); the rest are edge cases added to
-cover paths the slides don't reach (borrow-from-left, internal-key removal,
-cascading split, no-ops and order m≠3). All 27 cases pass.
+`make test` compila e roda `tests/test_btree.cpp`, que exercita `search()`,
+`insert()` e `remove()`. A maioria dos casos são os exemplos resolvidos dos
+slides da aula (`AED-03-Arvores-B.pdf`, ordem m=3); o restante são casos de
+borda adicionados para cobrir caminhos que os slides não alcançam (empréstimo
+do irmão da esquerda, remoção de chave interna, split em cascata, no-ops e ordem
+m≠3). Todos os 27 casos passam.
 
-### Test cases and coverage
+### Casos de teste e cobertura
 
-Cases are lettered per suite (A, B, C…). For the state-changing operations
-(`insert`, `remove`) each case has its own self-contained fixture pair sharing
-that letter — `<op>_<letter>_before.txt` / `<op>_<letter>_after.txt` (no shared
-chain files). `search` is read-only: every case queries the same shared
-`search_tree.txt`, so its letters index queries rather than files. The
-**Source** column marks whether a case is a worked example from the lecture
-slides (`AED-03-Arvores-B.pdf`) or an extra edge case added for coverage.
+Os casos são identificados por letra dentro de cada suíte (A, B, C…). Para as
+operações que alteram estado (`insert`, `remove`), cada caso tem seu próprio par
+de fixtures autocontido compartilhando essa letra —
+`<op>_<letra>_before.txt` / `<op>_<letra>_after.txt` (sem arquivos de cadeia
+compartilhados). O `search` é somente leitura: todo caso consulta o mesmo
+`search_tree.txt` compartilhado, então suas letras indexam consultas em vez de
+arquivos. A coluna **Origem** indica se o caso é um exemplo resolvido dos slides
+da aula (`AED-03-Arvores-B.pdf`) ou um caso de borda extra adicionado para
+cobertura.
 
-**`search()` — slide-60 B-tree** (read-only; all cases query `search_tree.txt`)
+**`search()` — árvore B do slide 60** (somente leitura; todos os casos consultam `search_tree.txt`)
 
-| Case | Op / key | Source | What it covers |
-|------|----------|--------|----------------|
-| A | search 30 | slides | key present in the root |
-| B | search 20 | slides | key present in an internal node |
-| C | search 40 | slides | key present in an internal node |
-| D | search 10 | slides | key present in a leaf |
-| E | search 25 | slides | key present in a leaf |
-| F | search 35 | slides | key present in a leaf |
-| G | search 50 | slides | key present in a leaf |
-| H | search 5 | slides | absent key below the minimum |
-| I | search 33 | slides | absent key between existing keys |
-| J | search 99 | slides | absent key above the maximum |
-| K | search 42 | added | search against an empty tree (`rootID == 0`, built inline, no fixture) |
+| Caso | Op / chave | Origem | O que cobre |
+|------|------------|--------|-------------|
+| A | search 30 | slides | chave presente na raiz |
+| B | search 20 | slides | chave presente em um nó interno |
+| C | search 40 | slides | chave presente em um nó interno |
+| D | search 10 | slides | chave presente em uma folha |
+| E | search 25 | slides | chave presente em uma folha |
+| F | search 35 | slides | chave presente em uma folha |
+| G | search 50 | slides | chave presente em uma folha |
+| H | search 5 | slides | chave ausente, abaixo do mínimo |
+| I | search 33 | slides | chave ausente, entre chaves existentes |
+| J | search 99 | slides | chave ausente, acima do máximo |
+| K | search 42 | extra | busca em árvore vazia (`rootID == 0`, montada inline, sem fixture) |
 
-**`insert()`** (fixtures `insert_<letter>_before.txt` / `_after.txt`)
+**`insert()`** (fixtures `insert_<letra>_before.txt` / `_after.txt`)
 
-| Case | Op / key | Source | What it covers |
-|------|----------|--------|----------------|
-| A | insert 20 | added | insert into a leaf with spare room (sorted in place) |
-| B | insert 10 | added | inserting an existing key is a no-op |
-| C | insert 50 | added | first key allocates the root |
-| D | insert 30 | added | full root leaf splits, median promoted to a new root |
-| E | insert 55 | slides | leaf split + median promoted into an existing parent |
-| F | insert 28 | added | leaf split overflows the parent, which splits too → new root (recursive `split()`) |
-| G | insert 25 | added | split at order m=5 (mid = (M+1)/2), proving order generality |
+| Caso | Op / chave | Origem | O que cobre |
+|------|------------|--------|-------------|
+| A | insert 20 | extra | insere em folha com espaço sobrando (ordenado no lugar) |
+| B | insert 10 | extra | inserir uma chave existente é no-op |
+| C | insert 50 | extra | a primeira chave aloca a raiz |
+| D | insert 30 | extra | folha-raiz cheia faz split, mediana promovida para uma nova raiz |
+| E | insert 55 | slides | split da folha + mediana promovida para um pai existente |
+| F | insert 28 | extra | split da folha estoura o pai, que também faz split → nova raiz (`split()` recursivo) |
+| G | insert 25 | extra | split com ordem m=5 (mid = (M+1)/2), comprovando a generalidade da ordem |
 
-**`remove()`** (fixtures `remove_<letter>_before.txt` / `_after.txt`)
+**`remove()`** (fixtures `remove_<letra>_before.txt` / `_after.txt`)
 
-| Case | Op / key | Source | What it covers |
-|------|----------|--------|----------------|
-| A | remove 58 | slides | simple leaf delete, no underflow |
-| B | remove 65 | slides | underflow fixed by borrowing from the **right** sibling |
-| C | remove 55 | slides | underflow fixed by **merging** with a sibling (parent key pulled down) |
-| D | remove 40 | slides | cascading merge that empties and **collapses the root** |
-| E | remove 50 | added | key in an internal node → replaced by in-order **successor** (`getSuccessorKey`) |
-| F | remove 80 | added | underflow fixed by borrowing from the **left** sibling (`borrowFromLeft`) |
-| G | remove 42 | added | removing the last key collapses the tree to **empty** |
-| H | remove 99 | added | removing an absent key is a no-op |
-| I | remove 10 | added | removing from an empty tree is a no-op |
+| Caso | Op / chave | Origem | O que cobre |
+|------|------------|--------|-------------|
+| A | remove 58 | slides | remoção simples em folha, sem underflow |
+| B | remove 65 | slides | underflow corrigido emprestando do irmão da **direita** |
+| C | remove 55 | slides | underflow corrigido **fazendo merge** com um irmão (chave do pai puxada para baixo) |
+| D | remove 40 | slides | merge em cascata que esvazia e **colapsa a raiz** |
+| E | remove 50 | extra | chave em nó interno → substituída pelo **sucessor** em ordem (`getSuccessorKey`) |
+| F | remove 80 | extra | underflow corrigido emprestando do irmão da **esquerda** (`borrowFromLeft`) |
+| G | remove 42 | extra | remover a última chave colapsa a árvore para **vazia** |
+| H | remove 99 | extra | remover uma chave ausente é no-op |
+| I | remove 10 | extra | remover de uma árvore vazia é no-op |
 
-Each test describes a tree in a readable text fixture (`tests/fixtures/*.txt`):
+Cada teste descreve uma árvore em um fixture de texto legível (`tests/fixtures/*.txt`):
 
 ```
 root <id>
 <id> <numKeys> <A[0]> <K[1]> <A[1]> ... <K[numKeys]> <A[numKeys]>
 ```
 
-`BTree::loadFromFile()` builds a tree straight from such a file. A case loads a
-*before* tree, runs the operation, then compares the result against the
-expected *final* tree. The comparison is **logical**: it walks both trees from
-the root, comparing each node's keys and the subtree shape, ignoring physical
-record ids and nodes abandoned on disk. Each case runs in a forked child, so a
-regression that crashes is reported as a single `FAIL` rather than aborting the
-suite.
+`BTree::loadFromFile()` constrói uma árvore diretamente a partir desse arquivo.
+Um caso carrega a árvore *antes*, roda a operação e então compara o resultado
+com a árvore *final* esperada. A comparação é **lógica**: percorre as duas
+árvores a partir da raiz, comparando as chaves de cada nó e o formato da
+subárvore, ignorando os ids físicos dos registros e os nós abandonados no disco.
+Cada caso roda em um processo filho (fork), então uma regressão que cause crash é
+reportada como um único `FAIL` em vez de abortar a suíte.
