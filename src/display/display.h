@@ -99,6 +99,41 @@ void displayLevelOrder(BTree<M>& tree) {
     std::cout << std::endl;
 }
 
+// Dump bruto do arquivo: imprime TODOS os registros do .dat em texto legível,
+// um por linha, na ordem física em que estão gravados. Diferente das views
+// acima (que só percorrem nós alcançáveis a partir da raiz), aqui mostramos o
+// arquivo inteiro — incluindo o registro 0 (cabeçalho, cujo A[0] guarda o id da
+// raiz) e eventuais nós antigos/livres. Útil para "ver" o binário .dat como
+// texto, já que o arquivo é uma sequência de structs BTreeNode<M> em bytes crus.
+//
+// O número de registros vem do tamanho do arquivo / sizeof(BTreeNode<M>).
+template <int M>
+void dumpFile(BTree<M>& tree) {
+    long bytes = tree.getDiskManager().getFileSize();
+    int numRecords = (int)(bytes / sizeof(BTreeNode<M>));
+
+    std::cout << "--- Dump bruto do .dat (" << numRecords << " registros, "
+              << bytes << " bytes, sizeof(no)=" << sizeof(BTreeNode<M>)
+              << ") ---\n";
+    std::cout << "raiz: rec " << tree.getRoot() << "\n";
+
+    for (int id = 0; id < numRecords; id++) {
+        BTreeNode<M> p = tree.getNode(id);
+
+        std::cout << "rec " << id;
+        if (id == 0) std::cout << " (cabecalho)";
+        std::cout << ": numKeys=" << p.numKeys;
+
+        // K[1..numKeys] entre os ponteiros A[0..numKeys]: A0 K1 A1 K2 A2 ...
+        std::cout << " | A[0]=" << p.A[0];
+        for (int k = 1; k <= p.numKeys; k++) {
+            std::cout << " K[" << k << "]=" << p.K[k]
+                      << " A[" << k << "]=" << p.A[k];
+        }
+        std::cout << "\n";
+    }
+}
+
 // Percorre a árvore procurando 'key' e imprime se foi encontrada e em qual
 // nó/índice. A lógica de traversal para exibição vive aqui (não na BTree).
 template <int M>

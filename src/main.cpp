@@ -59,6 +59,7 @@ void exibirMenu() {
     std::cout << "3. Buscar chave\n";
     std::cout << "4. Imprimir arvore\n";
     std::cout << "5. Estatisticas de I/O\n";
+    std::cout << "6. Dump bruto do arquivo .dat\n";
     std::cout << "0. Voltar / Sair\n";
     std::cout << "Escolha uma opcao: ";
 }
@@ -123,6 +124,15 @@ std::string capturarBusca(BTree<M>& tree, int chave) {
 }
 
 template <int M>
+std::string capturarDump(BTree<M>& tree) {
+    std::ostringstream oss;
+    std::streambuf* antigo = std::cout.rdbuf(oss.rdbuf());
+    dumpFile(tree);
+    std::cout.rdbuf(antigo);
+    return oss.str();
+}
+
+template <int M>
 std::string capturarStats(BTree<M>& tree) {
     std::ostringstream oss;
     oss << "--- Estatisticas do Disco ---\n";
@@ -166,6 +176,9 @@ void iniciarMenu() {
                 break;
             case 5:
                 resultado = capturarStats(tree);
+                break;
+            case 6:
+                resultado = capturarDump(tree);
                 break;
             case 0:
                 clearScreen();
