@@ -90,17 +90,20 @@ BTree<M>::~BTree() {
 
 template <int M>
 void BTree<M>::writeNode(int id, BTreeNode<M>& node) {
+    disk.startTimer();
     file.clear();
     // seekp: manipula o ponteiro de escrita para começo da informação no local do nó de id 'id'.
     file.seekp(id * sizeof(BTreeNode<M>), std::ios::beg);
     // write: escreve o nó no arquivo a partir do endereço de memória do node
     file.write((const char*)(&node), sizeof(BTreeNode<M>));
     file.flush();
+    disk.stopTimer();
     disk.incrementWrite(); 
 }
 
 template <int M>
 void BTree<M>::readNode(int id, BTreeNode<M>& node) {
+    disk.startTimer();
     file.clear();
     // seekg: manipula o ponteiro de leitura do arquivo,
     // move o ponteiro para o id * sizeof(BTreeNode<M>) bytes a partir do início (ios::beg) do arquivo.
@@ -108,6 +111,7 @@ void BTree<M>::readNode(int id, BTreeNode<M>& node) {
     // le o btrenode do arquivo que se encontra no endereço de memória do node "onde os dados lidos serão guardados"
     // (char* -byte puro)(&node)
     file.read((char*)(&node), sizeof(BTreeNode<M>));
+    disk.stopTimer();
     disk.incrementRead(); 
 }
 

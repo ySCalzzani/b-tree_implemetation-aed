@@ -21,15 +21,21 @@
  * - tipo        : "Seq" para inserção sequencial, "Rand" para inserção aleatória.
  * - reads       : Número total de leituras de disco realizadas durante as inserções.
  * - writes      : Número total de escritas de disco realizadas durante as inserções.
- * - tempo       : Tempo total gasto para realizar as inserções, em segundos.
- * - bytes       : Tamanho final do arquivo de dados em bytes após as inserções.    
+ * - avg_reads   : Média de leituras no disco por operação (reads / numKeys).
+ * - avg_writes  : Média de escritas no disco por operação (writes / numKeys).
+ * - tempo_total : Tempo total gasto para realizar as inserções, em segundos.
+ * - tempo_cpu   : Tempo de processamento (CPU) isolado, em segundos.
+ * - tempo_io    : Tempo de espera gasto exclusivamente com operações de I/O, em segundos.
+ * - bytes       : Tamanho final do arquivo de dados em bytes após as inserções. 
  * ------------------------------------------------------------------------- */
 template <int M>
 void runExperiment(int numKeys, bool sequential) {
     std::remove("tmp/experiment_btree.dat");
     BTree<M> tree("tmp/experiment_btree.dat");
+
     auto& disk = tree.getDiskManager();
     disk.resetCounters();
+    disk.resetIoTime();
 
     auto start_time = std::chrono::high_resolution_clock::now();
 
@@ -39,15 +45,25 @@ void runExperiment(int numKeys, bool sequential) {
     }
 
     auto end_time = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> diff = end_time - start_time;
+    std::chrono::duration<double> diff_total = end_time - start_time;
+    double total_time = diff_total.count();
+    double io_time = disk.getIoTime(); 
+    double cpu_time = total_time - io_time; 
+
+    double avg_reads_per_op = static_cast<double>(disk.getReadCount()) / numKeys;
+    double avg_writes_per_op = static_cast<double>(disk.getWriteCount()) / numKeys;
 
     std::cout << M << "," 
               << numKeys << "," 
               << (sequential ? "Seq" : "Rand") << ","
               << disk.getReadCount() << "," 
               << disk.getWriteCount() << "," 
-              << diff.count() << "," 
-              << disk.getFileSize() << std::endl;
+              << avg_reads_per_op << ","
+              << avg_writes_per_op << ","
+              << total_time << "," 
+              << cpu_time << "," 
+              << io_time << ","
+              << disk.getFileSize() << "\n";
 }
 
 void exibirMenu() {
@@ -196,14 +212,18 @@ void iniciarMenu() {
 * ------------------------------------------------------------------------- */
 void modoInterativoMain() {
     int m_escolhido;
-    std::cout << "Bem-vindo! Digite a ordem (m) desejada (ex: 3, 4, 100): ";
+    std::cout << "Bem-vindo! Digite a ordem (m) desejada (ex: 3, 4, 5, 10, 50, 100, 500, 1000): ";
     
     if (!(std::cin >> m_escolhido)) return;
 
     switch (m_escolhido) {
-        case 3:   iniciarMenu<3>();   break;
-        case 4:   iniciarMenu<4>();   break;
-        case 100: iniciarMenu<100>(); break;
+        case 3:    iniciarMenu<3>();    break;
+        case 4:    iniciarMenu<4>();    break;
+        case 5:    iniciarMenu<5>();    break;
+        case 10:   iniciarMenu<10>();   break;
+        case 50:   iniciarMenu<50>();   break;
+        case 100:  iniciarMenu<100>();  break;
+        case 500:  iniciarMenu<500>();  break;
         case 1000: iniciarMenu<1000>(); break;
         default:
             std::cout << "Erro: Ordem " << m_escolhido << " nao pre-compilada.\n";
@@ -215,8 +235,8 @@ void modoInterativoMain() {
 * main
 * Roda o modo interativo se nenhum argumento for passado. Se argumentos forem passados, roda o experimento.
 * Uso:
-* - Modo Interativo: ./btree
-* - Modo Experimento: ./btree --experiment <ordem_m> <num_chaves> <1_seq|0_rand>
+* - Modo Interativo: ./main.exe
+* - Modo Experimento: ./main.exe --experiment <ordem_m> <num_chaves> <1_seq|0_rand>
 * ------------------------------------------------------------------------- */
 int main(int argc, char* argv[]) {
     if (argc == 1) {
@@ -230,14 +250,19 @@ int main(int argc, char* argv[]) {
         bool sequential = std::stoi(argv[4]) == 1;
 
         if (m == 3)        runExperiment<3>(numKeys, sequential);
+        else if (m == 4)   runExperiment<4>(numKeys, sequential);
+        else if (m == 5)   runExperiment<5>(numKeys, sequential);
+        else if (m == 10)  runExperiment<10>(numKeys, sequential);
+        else if (m == 50)  runExperiment<50>(numKeys, sequential);
         else if (m == 100) runExperiment<100>(numKeys, sequential);
+        else if (m == 500) runExperiment<500>(numKeys, sequential);
         else if (m == 1000) runExperiment<1000>(numKeys, sequential);
         else std::cerr << "Erro: Ordem nao suportada.\n";
         
         return 0;
     }
 
-    std::cerr << "Uso Interativo: ./btree\n";
-    std::cerr << "Uso Experimento: ./btree --experiment <ordem_m> <num_chaves> <1_seq|0_rand>\n";
+    std::cerr << "Uso Interativo: ./main.exe\n";
+    std::cerr << "Uso Experimento: ./main.exe --experiment <ordem_m> <num_chaves> <1_seq|0_rand>\n";
     return 1;
 }
