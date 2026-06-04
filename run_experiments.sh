@@ -20,7 +20,7 @@ mkdir -p tmp
 mkdir -p data
 OUTPUT_FILE="data/resultados_experimentos.csv"
 
-echo "M,numKeys,tipo,reuso,reads,writes,avg_reads,avg_writes,tempo_total,tempo_cpu,tempo_io,bytes" > $OUTPUT_FILE
+echo "M,numKeys,tipo,reads,writes,avg_reads,avg_writes,tempo_total,tempo_cpu,tempo_io,bytes" > $OUTPUT_FILE
 echo "Ficheiro de saída '$OUTPUT_FILE' criado com sucesso."
 
 ORDENS=(3 5 10 50 100 500 1000)

@@ -1,4 +1,4 @@
-M,numKeys,tipo,reuso,reads,writes,avg_reads,avg_writes,tempo_total,tempo_cpu,tempo_io,bytes
+M,numKeys,tipo,reads,writes,avg_reads,avg_writes,tempo_total,tempo_cpu,tempo_io,bytes
 3,1000,Seq,9958,3964,9.958,3.964,0.0281376,0.00309482,0.0250428,35820
 3,1000,Rand,8532,3183,8.532,3.183,0.0256328,0.00267822,0.0229546,26424
 3,10000,Seq,133596,39959,13.3596,3.9959,0.340302,0.0369211,0.303381,359856
