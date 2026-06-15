@@ -24,6 +24,7 @@ private:
     void writeNode(int id, BTreeNode<M>& node);
     void readNode(int id, BTreeNode<M>& node);
     int allocateNode();
+    void freeNode(int id);
     void split(std::vector<int>& path);
     int minKeys() const;
     bool isLeaf(const BTreeNode<M>& node) const;
@@ -71,6 +72,7 @@ BTree<M>::BTree(const std::string& fname) : filename(fname), disk(fname) {
 
         BTreeNode<M> headerNode; 
         headerNode.A[0] = 0;
+        headerNode.A[1] = 0;
         writeNode(0, headerNode);
 
         rootID = 0; 
@@ -117,18 +119,43 @@ void BTree<M>::readNode(int id, BTreeNode<M>& node) {
 
 template <int M>
 int BTree<M>::allocateNode() {
+    BTreeNode<M> header;
+    readNode(0, header);
+
+    // Verifica se tem lixo para reciclar
+    if (header.A[1] != 0) {
+        int reusedID = header.A[1];
+        
+        BTreeNode<M> reusedNode;
+        readNode(reusedID, reusedNode);
+
+        // A lixeira agora aponta para o próximo lixo da fila
+        header.A[1] = reusedNode.A[0]; 
+        writeNode(0, header);
+
+        return reusedID; // Retorna o ID reciclado
+    }
+
+    // Se a lixeira estiver vazia, faz o comportamento normal
     file.clear();
-    // índice do último registro (adicionar no próximo registro disponível)
-    // Reaproveitamento de nós
-    // seekp : manipulação de arquivos, move o ponteiro de escrita 0 bytes 
-    // a partir do final (ios::end) do arquivo.
     file.seekp(0, std::ios::end);
-
-    // Retorna inteiro so tipo streampos - posição atual do ponteiro de escrita (end position)
     long endPos = file.tellp();
-
-
     return (int)(endPos / sizeof(BTreeNode<M>));
+}
+
+template <int M>
+void BTree<M>::freeNode(int id) {
+    BTreeNode<M> header;
+    readNode(0, header);
+
+    BTreeNode<M> deletedNode;
+    // O nó apagado vai apontar para o antigo "topo" da lixeira
+    deletedNode.A[0] = header.A[1]; 
+    writeNode(id, deletedNode);
+
+    // O cabeçalho agora aponta para este nó que acabou de ser apagado
+    header.A[1] = id; 
+    writeNode(0, header);
 }
 
 template <int M>
@@ -438,6 +465,7 @@ void BTree<M>::mergeChildren(BTreeNode<M>& parent, int parentID, int leftChildIn
 
     writeNode(leftID, left);
     writeNode(parentID, parent);
+    freeNode(rightID);
 }
 
 template <int M>
@@ -568,6 +596,8 @@ void BTree<M>::remove(int key) {
     readNode(rootID, root);
 
     if (root.numKeys == 0) {
+        int oldRootID = rootID;
+
         if (root.A[0] == 0) {
             rootID = 0;
         } else {
@@ -578,6 +608,8 @@ void BTree<M>::remove(int key) {
         readNode(0, header);
         header.A[0] = rootID;
         writeNode(0, header);
+
+        freeNode(oldRootID);
     }
 }
 
