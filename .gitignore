@@ -5,6 +5,10 @@ tmp/
 .venv/
 **/__pycache__/
 
+# TeX Live local do projeto (instalado por `make tex-install`; ~531 MB).
+# Dependência de build, não código-fonte.
+.texlive/
+
 .vscode
 .claude
 

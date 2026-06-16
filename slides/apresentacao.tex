@@ -3,11 +3,9 @@
 %  Slides Beamer, em pt-br. Estrutura segue o "Modelo de apresentacao PPT" do
 %  enunciado (AED-PG-2026-Trabalho.pdf): 10 slides + alguns extras.
 %
-%  COMPILAR COM pdflatex (mesma toolchain do projeto "IEEE Systematic Review":
-%  mise + tinytex). Duas passadas resolvem TOC/navegacao:
-%     make slides
-%  ou, manualmente:
-%     cd slides && pdflatex apresentacao.tex && pdflatex apresentacao.tex
+%  COMPILAR com `make slides`, que usa o TeX Live instalado LOCALMENTE no
+%  projeto (./.texlive, via `make tex-install`) -- sem mise nem TeX de sistema.
+%  Duas passadas resolvem TOC/navegacao.
 %
 %  Dados das tabelas: data/resultados_experimentos.csv e
 %  data/reuso_comparacao.csv (gerados por `make run_experiments`).
@@ -130,7 +128,7 @@
 % ###########################################################################
 
 % ===== Slide 2: Decisoes de implementacao ===================================
-\begin{frame}{Decisões de Implementação (Slide 2)}
+\begin{frame}{Decisões de Implementação}
   \begin{columns}[T,onlytextwidth]
     \begin{column}{0.48\textwidth}
       \begin{block}{Armazenamento da raiz}
@@ -172,7 +170,7 @@ file.read ((char*)(&node), sizeof(BTreeNode<M>));     // 1 registro
 \end{frame}
 
 % ===== Slide 3: Metodos implementados =======================================
-\begin{frame}{Métodos Implementados (Slide 3)}
+\begin{frame}{Métodos Implementados}
   \begin{columns}[T,onlytextwidth]
     \begin{column}{0.5\textwidth}
       \begin{block}{\texttt{BTree<M>}}
@@ -233,7 +231,7 @@ void freeNode(int id) {
 \end{frame}
 
 % ===== Print de codigo 2: split em cascata ==================================
-\begin{frame}[fragile]{Caso de uso em código: \emph{split} (o ponto mais difícil)}
+\begin{frame}[fragile]{Caso de uso em código: \emph{split}}
   Quando um nó enche (\texttt{numKeys == M}), ele é dividido e a mediana sobe:
   \begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
 void split(std::vector<int>& path) {
@@ -301,10 +299,10 @@ void split(std::vector<int>& path) {
 % ###########################################################################
 
 % ===== Slide 4: Analises efetuadas ==========================================
-\begin{frame}{Análises Efetuadas (Slide 4)}
+\begin{frame}{Análises Efetuadas}
   \begin{columns}[T,onlytextwidth]
     \begin{column}{0.5\textwidth}
-      \begin{block}{Testes unitários}
+      \begin{block}{Testes de validação}
         \footnotesize
         27 casos (11 \texttt{search}, 7 \texttt{insert}, 9 \texttt{remove}),
         cada um em processo filho (\texttt{fork}) para isolar \emph{crashes}.
@@ -328,7 +326,7 @@ void split(std::vector<int>& path) {
 \end{frame}
 
 % ===== Testes 1: estrategia / fixtures ======================================
-\begin{frame}[fragile]{Como testamos: por \emph{fixtures}}
+\begin{frame}[fragile]{Testes de validação: por \emph{fixtures}}
   \begin{columns}[T,onlytextwidth]
     \begin{column}{0.52\textwidth}
       \footnotesize
@@ -396,48 +394,127 @@ check(name, ok, msg);
   \end{columns}
 \end{frame}
 
+% ===== Metodo: cgroup p/ forcar I/O real ====================================
+\begin{frame}[fragile]{Forçando o disco real: \texttt{cgroup} na análise}
+  \footnotesize \textbf{Problema:} o \texttt{.dat} ($\le$36\,MB) cabe na RAM, então o
+  \alert{page cache do SO} serve o I/O e o \texttt{tempo\_io} mede memória, não o disco.
+  \vspace{0.4em}
+
+  \textbf{Solução:} rodar cada experimento dentro de um \alert{cgroup} de
+  memória limitada, via \texttt{systemd-run --user} (cgroup v2, \alert{sem root}):
+  \begin{lstlisting}[language=bash,basicstyle=\ttfamily\scriptsize,keywordstyle=]
+systemd-run --user --scope -p MemoryHigh=8M -p MemoryMax=64M \
+            ./main.exe --experiment <M> 1000000 <1=seq|0=rand>
+  \end{lstlisting}
+  \vspace{-0.1em}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.5\textwidth}
+      \begin{block}{Por que \texttt{MemoryHigh} (e não \texttt{Max})}
+        \scriptsize
+        Limite \alert{soft}: estrangula e força \emph{eviction} do cache (8\,MB
+        $<$ arquivo) $\Rightarrow$ os acessos batem no NVMe, mas \alert{não mata} o
+        processo. \texttt{MemoryMax} sozinho dá \emph{OOM-kill} sob páginas sujas;
+        aqui ele é só um teto de segurança (64\,MB).
+      \end{block}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{block}{O que isso valida}
+        \scriptsize
+        \begin{itemize}
+          \item \texttt{reads}/\texttt{writes}/\texttt{bytes}/altura
+            \alert{idênticos} cacheado vs.\ restrito.
+          \item Só o \alert{tempo} muda --- e só no aleatório.
+          \item Saída: \texttt{data/resultados\_io\_real.csv} (coluna \texttt{modo}).
+        \end{itemize}
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ===== Conceito: acesso sequencial vs aleatorio =============================
+\begin{frame}[fragile]{Inserção sequencial {\small$\times$} aleatória: o que muda}
+  \footnotesize No experimento, a única diferença é a \alert{ordem das chaves}
+  inseridas (\texttt{src/main.cpp}):
+  \begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
+int key = sequential ? i : rand();  // Seq: 0,1,2,...   Rand: rand()
+tree.insert(key);
+  \end{lstlisting}
+  \vspace{-0.1em}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.49\textwidth}
+      \begin{block}{Sequencial (0, 1, 2, \dots)}
+        \scriptsize
+        \begin{itemize}
+          \item Cada chave é a maior $\Rightarrow$ desce sempre para a
+            \alert{folha mais à direita}.
+          \item Toca sempre o mesmo caminho (a \alert{espinha direita},
+            $\sim$altura nós) $\Rightarrow$ \alert{alta localidade}.
+          \item Folhas à esquerda ``congelam'' meio cheias $\Rightarrow$
+            ocupação $\sim$50\% $\Rightarrow$ arquivo \alert{maior}.
+        \end{itemize}
+      \end{block}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+      \begin{block}{Aleatório (\texttt{rand()})}
+        \scriptsize
+        \begin{itemize}
+          \item Cada chave cai em qualquer ponto $\Rightarrow$ desce um
+            \alert{caminho diferente} a cada inserção.
+          \item Toca a \alert{árvore inteira} (11--36\,MB) $\Rightarrow$
+            \alert{baixa localidade}.
+          \item Folhas enchem uniformemente $\Rightarrow$ ocupação
+            $\sim$69\% (ln 2) $\Rightarrow$ arquivo \alert{menor}.
+        \end{itemize}
+      \end{block}
+    \end{column}
+  \end{columns}
+  \vspace{0.2em}
+  \footnotesize\color{btgray} É a ordem das \emph{chaves} (não offsets no
+  arquivo): ambos usam \texttt{seek} por id. A ordem é que induz acesso aos nós
+  com alta ou baixa \emph{localização das referências} (AED-01).
+\end{frame}
+
 % ===== Slide 5: Metricas utilizadas =========================================
-\begin{frame}{Métricas Utilizadas (Slide 5)}
+\begin{frame}{Métricas Utilizadas}
   \begin{description}
     \item[M / numKeys / tipo] Ordem, nº de chaves e padrão (Seq/Rand).
-    \item[reads / writes / avg] Leituras e escritas de nós em disco e a
-      \alert{média por operação} (\texttt{readNode}/\texttt{writeNode}).
-    \item[tempo\_cpu / tempo\_io] Tempo de CPU \emph{separado} do tempo gasto nas
-      chamadas de I/O (\texttt{tempo\_cpu = total $-$ tempo\_io}); como o \texttt{.dat}
-      cabe na RAM, \texttt{tempo\_io} reflete o \alert{page cache} (ver slide de I/O real).
+    \item[reads / writes] Total de \alert{leituras} e de \alert{escritas} de nós em
+      disco (\texttt{readNode}/\texttt{writeNode}), contadas \emph{separadamente}.
+    \item[tempo\_io] Tempo gasto nas chamadas de I/O.
     \item[bytes] Tamanho final do \texttt{.dat} (\texttt{getFileSize()}) --- ocupação.
     \item[altura] Nº de níveis da árvore (\texttt{getHeight()}, descendo 1 nó por vez).
   \end{description}
-  \footnotesize\color{btgray} Obs.: \texttt{avg\_reads} inclui o acesso ao
-  registro 0 (cabeçalho/lixeira) feito a cada alocação.
+  \footnotesize\color{btgray} Obs.: \texttt{reads}/\texttt{writes} contam também o
+  acesso ao registro 0 (cabeçalho/lixeira) feito a cada alocação.
 \end{frame}
 
 % ===== Slide 6: Tabela de Resultados ========================================
-\begin{frame}{Tabela de Resultados (Slide 6)}
+\begin{frame}{Tabela de Resultados}
   \centering\footnotesize
   Inserção sequencial --- \texttt{data/resultados\_experimentos.csv}
   \vspace{0.4em}
-  \begin{tabular}{r r c r r r r}
+  \begin{tabular}{r r c r r r}
     \toprule
-    $M$ & $N$ & altura & avg\_reads & $t_{cpu}$(s) & $t_{io}$(s) & bytes \\
+    $M$ & $N$ & altura & reads & writes & bytes \\
     \midrule
-    3    & $10^3$ & 9  & 10,95 & 0,002 & 0,009  & 35\,820 \\
-    3    & $10^5$ & 16 & 17,69 & 0,23  & 1,20   & 3\,599\,820 \\
-    3    & $10^6$ & 19 & 20,95 & 2,67  & 14,18  & 35\,999\,784 \\
-    100  & $10^6$ & 4  & 3,80  & 1,12  & 3,49   & 16\,571\,296 \\
-    1000 & $10^6$ & 3  & 2,50  & 2,61  & 3,52   & 16\,064\,060 \\
+    3    & $10^3$ & 9  & 10\,952      & 3\,964      & 35\,820 \\
+    3    & $10^5$ & 16 & 1\,768\,897  & 399\,950    & 3\,599\,820 \\
+    3    & $10^6$ & 19 & 20\,951\,387 & 3\,999\,941 & 35\,999\,784 \\
+    100  & $10^6$ & 4  & 3\,803\,513  & 1\,061\,213 & 16\,571\,296 \\
+    1000 & $10^6$ & 3  & 2\,504\,506  & 1\,006\,006 & 16\,064\,060 \\
     \bottomrule
   \end{tabular}
   \vspace{0.6em}
   \begin{itemize}\footnotesize
-    \item $M\!\uparrow \Rightarrow$ \alert{altura $\downarrow$} e \alert{avg\_reads $\downarrow$}
-      (menos acessos a disco por operação).
-    \item Para $M$ pequeno, $t_{io} \gg t_{cpu}$ (operação \alert{limitada por I/O}).
+    \item $M\!\uparrow \Rightarrow$ \alert{altura $\downarrow$} e \alert{menos
+      leituras/escritas totais} (menos nós tocados por inserção).
+    \item \texttt{reads} $\gg$ \texttt{writes}: cada inserção \emph{lê} o caminho
+      inteiro, mas só \emph{reescreve} os nós alterados.
   \end{itemize}
 \end{frame}
 
 % ===== Slide 6b: Ocupacao com vs sem reuso ==================================
-\begin{frame}{Impacto do Reuso na Ocupação (Slide 6)}
+\begin{frame}{Impacto do Reuso na Ocupação}
   \centering\footnotesize
   Workload: insere $N$ $\to$ remove $N/2$ $\to$ reinsere $N/2$ (Seq) ---
   \texttt{data/reuso\_comparacao.csv}
@@ -459,12 +536,13 @@ check(name, ok, msg);
 \end{frame}
 
 % ===== Grafico: acessos vs M ================================================
-\begin{frame}{Acessos a disco {\small$\times$} ordem $M$}
+\begin{frame}{Leituras e escritas {\small$\times$} ordem $M$}
   \centering
   \includegraphics[height=0.74\textheight]{fig_reads_vs_m.png}
 
-  \footnotesize $M\!\uparrow \Rightarrow$ menos leituras por operação; a partir de
-  $M{\approx}100$ estabiliza em $\sim$2--3 acessos (árvore mais rasa).
+  \footnotesize $M\!\uparrow \Rightarrow$ menos \texttt{reads} e \texttt{writes}
+  totais (árvore mais rasa: menos nós por inserção). As \texttt{reads} caem de
+  ${\sim}21$ para ${\sim}2{,}5$ milhões; \texttt{reads} sempre $>$ \texttt{writes}.
 \end{frame}
 
 % ===== Grafico: altura ======================================================
@@ -474,34 +552,6 @@ check(name, ok, msg);
 
   \footnotesize Altura $\propto \log_M N$: cresce devagar com $N$ e cai
   bruscamente com $M$ (de 19 níveis em $M{=}3$ para 3--4 em $M{\ge}100$, $N{=}10^6$).
-\end{frame}
-
-% ===== Grafico: trade-off ===================================================
-\begin{frame}{Trade-off CPU {\small$\times$} I/O (em memória)}
-  \centering
-  \includegraphics[height=0.66\textheight]{fig_tradeoff.png}
-
-  \footnotesize Tempos \alert{servidos pelo page cache} (o \texttt{.dat} cabe na
-  RAM): em memória, $M$ pequeno faz mais acessos (mais syscalls/\texttt{memcpy}) e
-  $M$ grande gasta \alert{CPU} (busca linear em nós grandes) --- mínimo em
-  $M{\approx}100$. \alert{Sob I/O real} o quadro muda (próximo slide).
-\end{frame}
-
-% ===== Grafico: I/O real vs cache (cgroup, opcao 2) =========================
-\begin{frame}{Cache de RAM {\small$\times$} disco real: medindo o I/O honesto}
-  \centering
-  \includegraphics[height=0.58\textheight]{fig_io_real.png}
-
-  \vspace{-0.1em}
-  \footnotesize O \texttt{.dat} de $10^6$ chaves (11--36\,MB) cabe na RAM
-  $\Rightarrow$ o \alert{page cache do SO} serve quase todo o I/O; o
-  \texttt{tempo\_io} ``cacheado'' mede \emph{memória}, não a mecânica do disco
-  (device é \alert{NVMe}, sem agulha). Limitando a RAM do processo por
-  \texttt{cgroup} (\texttt{systemd-run -p MemoryHigh=8M}, opção 2) forçamos o
-  dispositivo: só a inserção \alert{aleatória} (baixa localidade, \emph{working
-  set} $=$ árvore toda) paga I/O real (\alert{até 16$\times$}); a \alert{sequencial}
-  (espinha direita) quase não muda. \alert{\texttt{reads}/\texttt{bytes}/altura são
-  idênticos} entre os modos --- a métrica lógica independe do cache.
 \end{frame}
 
 % ===== Grafico: ocupacao Seq vs Rand ========================================
@@ -527,7 +577,7 @@ check(name, ok, msg);
 % ###########################################################################
 
 % ===== Slide 7: Utilizacao de IA ============================================
-\begin{frame}{Utilização de IA)}
+\begin{frame}{Utilização de IA}
   Usamos um assistente de IA como \alert{apoio}, sempre com validação humana e
   conferência contra os dados e o enunciado. Onde ajudou:
   \vspace{0.2em}
@@ -545,55 +595,17 @@ check(name, ok, msg);
   \vspace{0.2em}
 \end{frame}
 
-% ===== Slide 8: Dificuldades + Vantagens/Desvantagens =======================
-\begin{frame}{Dificuldades, Vantagens e Desvantagens}
-  \begin{columns}[T,onlytextwidth]
-    \begin{column}{0.34\textwidth}
-      \begin{block}{Dificuldades}
-        \scriptsize
-        \begin{itemize}
-          \item Ponteiros no split/merge
-          \item Persistência do cabeçalho
-          \item \texttt{removeRecursive} (todos os casos)
-          \item Nós órfãos / controle de I/O
-        \end{itemize}
-      \end{block}
-    \end{column}
-    \begin{column}{0.32\textwidth}
-      \begin{block}{Vantagens}
-        \scriptsize
-        \begin{itemize}
-          \item Altura logarítmica
-          \item Poucos acessos a disco/op.
-          \item Naturalmente balanceada
-          \item Busca ordenada / por intervalo \\(\scriptsize eficiente na variante B+)
-        \end{itemize}
-      \end{block}
-    \end{column}
-    \begin{column}{0.32\textwidth}
-      \begin{block}{Desvantagens (vs.\ outras)}
-        \scriptsize
-        \begin{itemize}
-          \item vs.\ \textbf{AVL/BST}: mais complexa, custo de split/merge
-          \item vs.\ \textbf{hash}: $O(1)$ ponto, mas \alert{sem ordem/intervalo}
-            e degrada em disco
-        \end{itemize}
-      \end{block}
-    \end{column}
-  \end{columns}
-\end{frame}
-
 % ===== Slide 10: Conclusao e Referencias ====================================
 \begin{frame}{Conclusão e Referências}
   \begin{itemize}
-    \item \textbf{Ordem $M$ reduz acessos e altura:} para $10^6$ chaves,
-      \texttt{avg\_reads} cai de \alert{20,95 ($M{=}3$)} para \alert{2,50
-      ($M{=}1000$)} e a altura de \alert{19 para 3} níveis.
-    \item \textbf{CPU vs.\ I/O (com a ressalva do cache):} os tempos da bateria são
-      servidos pelo \alert{page cache} (o \texttt{.dat} cabe na RAM; device NVMe), não
-      pela mecânica do disco. Forçando I/O real por \texttt{cgroup}, só a inserção
-      \alert{aleatória} (baixa localidade) paga disco --- a \alert{contagem de acessos}
-      (métrica lógica, independente da máquina) continua sendo o resultado robusto.
+    \item \textbf{Ordem $M$ reduz acessos e altura:} para $10^6$ chaves, as
+      \alert{leituras} caem de ${\sim}21$ milhões ($M{=}3$) para ${\sim}2{,}5$
+      milhões ($M{=}1000$) e as \alert{escritas} de ${\sim}4{,}0$ para ${\sim}1{,}0$
+      milhão; a altura, de \alert{19 para 3} níveis.
+    \item \textbf{Cache vs.\ disco real:} os tempos da bateria refletem o
+      \alert{page cache} (o \texttt{.dat} cabe na RAM; device NVMe). Forçando I/O
+      real por \texttt{cgroup}, só a inserção \alert{aleatória} (baixa localidade)
+      paga disco; a \alert{contagem de acessos} (lógica) independe da máquina.
     \item \textbf{Reuso de nós economiza $\approx$33\%} de ocupação do arquivo.
     \item \textbf{Conformidade:} I/O estritamente 1 nó por vez (1 seek + 1 struct).
   \end{itemize}

@@ -32,11 +32,16 @@ TMP_DIR  := tmp
 TEST_SRC := tests/test_btree.cpp
 TEST_BIN := $(TMP_DIR)/test_btree.exe
 
-# Slides Beamer. Compilados com pdflatex (mesma toolchain do projeto
-# "IEEE Systematic Review": mise + tinytex). Duas passadas resolvem TOC/nav.
+# Slides Beamer, compilados com um TeX Live instalado LOCALMENTE no projeto
+# (./.texlive/, gerado por `make tex-install`). NAO depende de mise nem de um
+# TeX de sistema. Duas passadas resolvem TOC/navegacao.
 SLIDES_DIR := slides
 SLIDES_SRC := apresentacao.tex
-LATEX      := pdflatex
+TEX_DIR    := .texlive
+# pdflatex local (caminho absoluto p/ funcionar apos 'cd slides'); cai para o
+# pdflatex do PATH apenas se a instalacao local ainda nao existir.
+TEX_LOCAL  := $(abspath $(firstword $(wildcard $(TEX_DIR)/bin/*/pdflatex)))
+LATEX      := $(if $(TEX_LOCAL),$(TEX_LOCAL),pdflatex)
 LATEXFLAGS := -interaction=nonstopmode -halt-on-error
 
 # Geracao dos artefatos do deck. As figuras usam so matplotlib+numpy (sem
@@ -45,7 +50,7 @@ PYTHON     := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo p
 FIG_SCRIPT := analysis/gerar_graficos.py
 SESS_SCRIPT := slides/capturar_sessao.sh
 
-.PHONY: all run run_experiments test graficos sessions slides-assets slides slides-clean clean
+.PHONY: all run run_experiments test graficos sessions slides-assets tex-install slides slides-clean clean
 
 all: $(TARGET)
 
@@ -80,13 +85,25 @@ sessions:
 # interface mudarem; os arquivos gerados sao versionados (como o .pdf).
 slides-assets: graficos sessions
 
-# Gera slides/apresentacao.pdf. Requer pdflatex no PATH (ex.: mise + tinytex,
-# como no projeto "IEEE Systematic Review", ou um TeX Live instalado).
+# Instala um TeX Live minimo (TinyTeX) LOCALMENTE em ./.texlive, sem mise e sem
+# root. Rode uma vez; depois `make slides` usa esse TeX. (./.texlive e' ignorado
+# pelo git -- e' dependencia de build, nao codigo-fonte.)
+tex-install:
+	@if [ -n "$(TEX_LOCAL)" ]; then echo "TeX local ja existe em $(TEX_DIR)/."; exit 0; fi
+	@echo "Instalando TinyTeX em $(TEX_DIR)/ ..."
+	curl -fsSL https://yihui.org/tinytex/install-bin-unix.sh | sh -s - --no-path
+	mv "$(HOME)/.TinyTeX" "$(TEX_DIR)"
+	"$(TEX_DIR)"/bin/*/tlmgr install beamer translator pgf listings booktabs \
+		babel-portuguese xcolor graphics
+	@echo "TeX local instalado em $(TEX_DIR)/."
+
+# Gera slides/apresentacao.pdf usando o pdflatex LOCAL do projeto (./.texlive).
+# Se ainda nao instalado, rode `make tex-install`.
 # Usa as figuras/sessoes ja versionadas; rode `make slides-assets` p/ regenera-las.
 slides:
-	@command -v $(LATEX) >/dev/null 2>&1 || { \
-		echo "ERRO: '$(LATEX)' nao encontrado no PATH."; \
-		echo "Ative a toolchain TeX (ex.: 'mise' com tinytex) e tente de novo."; \
+	@$(LATEX) --version >/dev/null 2>&1 || { \
+		echo "ERRO: pdflatex nao encontrado ($(LATEX))."; \
+		echo "Rode 'make tex-install' p/ instalar o TeX local em $(TEX_DIR)/."; \
 		exit 1; }
 	cd $(SLIDES_DIR) && $(LATEX) $(LATEXFLAGS) $(SLIDES_SRC)
 	cd $(SLIDES_DIR) && $(LATEX) $(LATEXFLAGS) $(SLIDES_SRC)

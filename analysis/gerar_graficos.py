@@ -76,17 +76,22 @@ def save(fig, name):
 
 # -----------------------------------------------------------------------------
 def fig_reads_vs_m(res):
-    """avg_reads x M (Seq e Rand), N=10^6. Q: nº de acessos; onde o I/O cai."""
-    fig, ax = plt.subplots(figsize=(7.2, 4.2))
-    for tipo, color, mark in (("Seq", BLUE, "o"), ("Rand", ORANGE, "s")):
+    """reads e writes TOTAIS x M (Seq e Rand), N=10^6. Quantas leituras e
+    escritas a estrutura faz, separadas (nao a media por operacao)."""
+    fig, ax = plt.subplots(figsize=(7.6, 4.4))
+    for tipo, color, ls in (("Seq", BLUE, "-"), ("Rand", ORANGE, "--")):
         d = sub(res, numKeys=N_BIG, tipo=tipo)
-        ax.plot([r["M"] for r in d], [r["avg_reads"] for r in d],
-                marker=mark, color=color, lw=2, label=tipo)
+        ax.plot([r["M"] for r in d], [r["reads"] for r in d],
+                marker="o", color=color, lw=2, ls=ls, label=f"leituras (reads) — {tipo}")
+        ax.plot([r["M"] for r in d], [r["writes"] for r in d],
+                marker="s", color=color, lw=2, ls=ls, alpha=0.6,
+                label=f"escritas (writes) — {tipo}")
     ax.set_xscale("log")
+    ax.set_yscale("log")
     ax.set_xlabel("Ordem M (escala log)")
-    ax.set_ylabel("Leituras medias por operacao")
-    ax.set_title("Acessos a disco vs. ordem M  ($N=10^6$)")
-    ax.legend(title="Insercao")
+    ax.set_ylabel("Total de acessos a disco (log)")
+    ax.set_title("Leituras e escritas totais vs. ordem M  ($N=10^6$)")
+    ax.legend(fontsize=9)
     save(fig, "fig_reads_vs_m.png")
 
 
@@ -117,26 +122,6 @@ def fig_altura(res):
 
     fig.suptitle("Altura da arvore: cresce com N, encolhe com M", y=1.02)
     save(fig, "fig_altura.png")
-
-
-def fig_tradeoff(res):
-    """tempo total/cpu/io x M (Seq, N=10^6) + zona otima. Q: CPU vs I/O; M otimo."""
-    d = sub(res, numKeys=N_BIG, tipo="Seq")
-    Ms = [r["M"] for r in d]
-    fig, ax = plt.subplots(figsize=(7.2, 4.2))
-    ax.axvspan(100, 500, color=GREEN, alpha=0.12, label="zona otima")
-    ax.plot(Ms, [r["tempo_total"] for r in d], marker="o", color=GRAY,
-            lw=2.5, label="total")
-    ax.plot(Ms, [r["tempo_io"] for r in d], marker="s", color=BLUE,
-            lw=2, label="I/O (disco)")
-    ax.plot(Ms, [r["tempo_cpu"] for r in d], marker="^", color=ORANGE,
-            lw=2, label="CPU")
-    ax.set_xscale("log")
-    ax.set_xlabel("Ordem M (escala log)")
-    ax.set_ylabel("Tempo (s)")
-    ax.set_title("Trade-off CPU x I/O  ($N=10^6$, Seq)")
-    ax.legend()
-    save(fig, "fig_tradeoff.png")
 
 
 def fig_ocupacao(res):
@@ -220,7 +205,6 @@ def main():
     reuse = load(os.path.join(DATA, "reuso_comparacao.csv"))
     fig_reads_vs_m(res)
     fig_altura(res)
-    fig_tradeoff(res)
     fig_ocupacao(res)
     fig_reuso(reuse)
     io_path = os.path.join(DATA, "resultados_io_real.csv")
