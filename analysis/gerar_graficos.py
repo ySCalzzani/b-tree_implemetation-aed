@@ -182,6 +182,38 @@ def fig_reuso(reuse):
     save(fig, "fig_reuso.png")
 
 
+def fig_io_real(io):
+    """tempo_io x M, cacheado vs. restrito (cgroup), Seq e Rand, N=10^6.
+
+    Demonstra que os tempos da bateria padrao sao servidos pelo page cache do
+    SO (o .dat cabe na RAM): ao limitar a memoria do processo via cgroup
+    (modo 'restrito'), so o padrao de BAIXA LOCALIDADE (Rand) passa a pagar
+    I/O real no dispositivo (NVMe); o Sequencial, de alta localidade, quase
+    nao muda. As contagens logicas (reads/bytes/altura) sao identicas entre os
+    modos -- so o tempo muda. Responde, de forma honesta, a pergunta CPU vs I/O.
+    """
+    fig, ax = plt.subplots(figsize=(7.6, 4.4))
+    series = (
+        ("Rand", "restrito", ORANGE, "s", "-", "Rand — restrito (I/O real)"),
+        ("Rand", "cacheado", ORANGE, "s", "--", "Rand — cacheado"),
+        ("Seq", "restrito", BLUE, "o", "-", "Seq — restrito (I/O real)"),
+        ("Seq", "cacheado", BLUE, "o", "--", "Seq — cacheado"),
+    )
+    for tipo, modo, color, mark, ls, lbl in series:
+        d = sorted((r for r in io if r["tipo"] == tipo and r["modo"] == modo),
+                   key=lambda r: r["M"])
+        if not d:
+            continue
+        ax.plot([r["M"] for r in d], [r["tempo_io"] for r in d],
+                marker=mark, color=color, lw=2, ls=ls, label=lbl)
+    ax.set_xscale("log")
+    ax.set_xlabel("Ordem M (escala log)")
+    ax.set_ylabel("Tempo de I/O (s)")
+    ax.set_title("I/O real vs. page cache  ($N=10^6$): cgroup MemoryHigh força o disco")
+    ax.legend()
+    save(fig, "fig_io_real.png")
+
+
 def main():
     print("Gerando figuras em slides/img/ ...")
     res = load(os.path.join(DATA, "resultados_experimentos.csv"))
@@ -191,6 +223,11 @@ def main():
     fig_tradeoff(res)
     fig_ocupacao(res)
     fig_reuso(reuse)
+    io_path = os.path.join(DATA, "resultados_io_real.csv")
+    if os.path.exists(io_path):
+        fig_io_real(load(io_path))
+    else:
+        print("  (pulado fig_io_real: data/resultados_io_real.csv ausente)")
     print("Pronto.")
 
 

@@ -169,8 +169,6 @@ struct BTreeNode { int numKeys; int K[M+1]; int A[M+1]; };
 file.seekg(id * sizeof(BTreeNode<M>), std::ios::beg); // 1 no
 file.read ((char*)(&node), sizeof(BTreeNode<M>));     // 1 registro
   \end{lstlisting}
-  \footnotesize Conferência: arquivo de $M{=}3$/1000 chaves = 35\,820 bytes
-  $\div$ 36 bytes-por-nó $=$ 995 registros exatos.
 \end{frame}
 
 % ===== Slide 3: Metodos implementados =======================================
@@ -330,7 +328,7 @@ void split(std::vector<int>& path) {
 \end{frame}
 
 % ===== Testes 1: estrategia / fixtures ======================================
-\begin{frame}[fragile]{Como testamos: oráculo por \emph{fixtures}}
+\begin{frame}[fragile]{Como testamos: por \emph{fixtures}}
   \begin{columns}[T,onlytextwidth]
     \begin{column}{0.52\textwidth}
       \footnotesize
@@ -404,8 +402,9 @@ check(name, ok, msg);
     \item[M / numKeys / tipo] Ordem, nº de chaves e padrão (Seq/Rand).
     \item[reads / writes / avg] Leituras e escritas de nós em disco e a
       \alert{média por operação} (\texttt{readNode}/\texttt{writeNode}).
-    \item[tempo\_cpu / tempo\_io] Tempo de CPU \emph{separado} do tempo de espera
-      de I/O (\texttt{tempo\_cpu = total $-$ tempo\_io}).
+    \item[tempo\_cpu / tempo\_io] Tempo de CPU \emph{separado} do tempo gasto nas
+      chamadas de I/O (\texttt{tempo\_cpu = total $-$ tempo\_io}); como o \texttt{.dat}
+      cabe na RAM, \texttt{tempo\_io} reflete o \alert{page cache} (ver slide de I/O real).
     \item[bytes] Tamanho final do \texttt{.dat} (\texttt{getFileSize()}) --- ocupação.
     \item[altura] Nº de níveis da árvore (\texttt{getHeight()}, descendo 1 nó por vez).
   \end{description}
@@ -459,30 +458,6 @@ check(name, ok, msg);
   \end{itemize}
 \end{frame}
 
-% ===== Perguntas do enunciado -> respostas ==================================
-\begin{frame}{Perguntas do enunciado $\to$ onde respondemos}
-  \centering\footnotesize
-  \begin{tabular}{p{6.3cm} l}
-    \toprule
-    \textbf{Pergunta experimental} & \textbf{Resposta} \\
-    \midrule
-    Como a ordem $M$ afeta os acessos a disco? & fig.\ \emph{reads}, tabela \\
-    Conjuntos de $10^3$ a $10^6$, Seq e Aleatório & 70 execuções (varredura) \\
-    Nº médio de acessos por operação & \texttt{avg\_reads}, fig.\ \emph{reads} \\
-    Ocupação do arquivo (com e \alert{sem} reuso) & fig.\ \emph{reuso}, fig.\ \emph{ocupação} \\
-    Tempo de execução: CPU \emph{vs.} I/O & fig.\ \emph{trade-off} \\
-    Inserção Sequencial \emph{vs.} Aleatória & fig.\ \emph{reads}/\emph{ocupação} \\
-    Altura da árvore \emph{vs.} $M$ e \emph{vs.} $N$ & fig.\ \emph{altura} \\
-    Existe uma ordem $M$ ótima? & fig.\ \emph{trade-off} ($\sim M{=}100$--$500$) \\
-    \bottomrule
-  \end{tabular}
-  \vspace{0.5em}
-
-  \footnotesize Os gráficos a seguir são gerados de
-  \texttt{data/resultados\_experimentos.csv} por
-  \texttt{analysis/gerar\_graficos.py} (\texttt{make graficos}).
-\end{frame}
-
 % ===== Grafico: acessos vs M ================================================
 \begin{frame}{Acessos a disco {\small$\times$} ordem $M$}
   \centering
@@ -502,12 +477,31 @@ check(name, ok, msg);
 \end{frame}
 
 % ===== Grafico: trade-off ===================================================
-\begin{frame}{Trade-off CPU {\small$\times$} I/O: a ordem ótima}
+\begin{frame}{Trade-off CPU {\small$\times$} I/O (em memória)}
   \centering
-  \includegraphics[height=0.74\textheight]{fig_tradeoff.png}
+  \includegraphics[height=0.66\textheight]{fig_tradeoff.png}
 
-  \footnotesize $M$ pequeno é \alert{limitado por I/O} (mais acessos); $M$ muito
-  grande gasta \alert{CPU} reorganizando nós grandes. Ótimo em $\sim M{=}100$--$500$.
+  \footnotesize Tempos \alert{servidos pelo page cache} (o \texttt{.dat} cabe na
+  RAM): em memória, $M$ pequeno faz mais acessos (mais syscalls/\texttt{memcpy}) e
+  $M$ grande gasta \alert{CPU} (busca linear em nós grandes) --- mínimo em
+  $M{\approx}100$. \alert{Sob I/O real} o quadro muda (próximo slide).
+\end{frame}
+
+% ===== Grafico: I/O real vs cache (cgroup, opcao 2) =========================
+\begin{frame}{Cache de RAM {\small$\times$} disco real: medindo o I/O honesto}
+  \centering
+  \includegraphics[height=0.58\textheight]{fig_io_real.png}
+
+  \vspace{-0.1em}
+  \footnotesize O \texttt{.dat} de $10^6$ chaves (11--36\,MB) cabe na RAM
+  $\Rightarrow$ o \alert{page cache do SO} serve quase todo o I/O; o
+  \texttt{tempo\_io} ``cacheado'' mede \emph{memória}, não a mecânica do disco
+  (device é \alert{NVMe}, sem agulha). Limitando a RAM do processo por
+  \texttt{cgroup} (\texttt{systemd-run -p MemoryHigh=8M}, opção 2) forçamos o
+  dispositivo: só a inserção \alert{aleatória} (baixa localidade, \emph{working
+  set} $=$ árvore toda) paga I/O real (\alert{até 16$\times$}); a \alert{sequencial}
+  (espinha direita) quase não muda. \alert{\texttt{reads}/\texttt{bytes}/altura são
+  idênticos} entre os modos --- a métrica lógica independe do cache.
 \end{frame}
 
 % ===== Grafico: ocupacao Seq vs Rand ========================================
@@ -533,17 +527,15 @@ check(name, ok, msg);
 % ###########################################################################
 
 % ===== Slide 7: Utilizacao de IA ============================================
-\begin{frame}{Utilização de IA (Slide 7)}
+\begin{frame}{Utilização de IA)}
   Usamos um assistente de IA como \alert{apoio}, sempre com validação humana e
   conferência contra os dados e o enunciado. Onde ajudou:
   \vspace{0.2em}
   \begin{description}\footnotesize
     \item[Revisão de código] Revisão crítica que apontou casos de borda ---
       destaque para a \alert{falha silenciosa de I/O} quando \texttt{tmp/} não
-      existia ($\to$ \texttt{throw} em \texttt{readNode}/\texttt{writeNode} e
-      criação de \texttt{tmp/}).
+      existia.
     \item[Geração de casos de teste] Sugestão de \emph{fixtures} e cenários
-      (split em cascata, \emph{borrow}/\emph{merge}, colapso da raiz, no-ops)
       que ampliaram a cobertura para os 27 casos.
     \item[Comentários e documentação] Apoio na redação de comentários do código,
       do \texttt{README} e dos cabeçalhos das funções.
@@ -551,12 +543,10 @@ check(name, ok, msg);
       da consistência dos números com os CSVs.
   \end{description}
   \vspace{0.2em}
-  \footnotesize\color{btgray} Decisões de projeto, implementação e análise
-  permaneceram do grupo; a IA acelerou estudo, revisão e redação.
 \end{frame}
 
 % ===== Slide 8: Dificuldades + Vantagens/Desvantagens =======================
-\begin{frame}{Dificuldades, Vantagens e Desvantagens (Slide 8)}
+\begin{frame}{Dificuldades, Vantagens e Desvantagens}
   \begin{columns}[T,onlytextwidth]
     \begin{column}{0.34\textwidth}
       \begin{block}{Dificuldades}
@@ -576,7 +566,7 @@ check(name, ok, msg);
           \item Altura logarítmica
           \item Poucos acessos a disco/op.
           \item Naturalmente balanceada
-          \item Busca por intervalo
+          \item Busca ordenada / por intervalo \\(\scriptsize eficiente na variante B+)
         \end{itemize}
       \end{block}
     \end{column}
@@ -593,32 +583,18 @@ check(name, ok, msg);
   \end{columns}
 \end{frame}
 
-% ===== Slide 9: Aplicacoes Praticas =========================================
-\begin{frame}{Aplicações Práticas (Slide 9)}
-  \begin{description}
-    \item[Bancos de dados relacionais] MySQL InnoDB e PostgreSQL usam Árvores B+
-      nos índices para localizar registros em $O(\log n)$ acessos a disco.
-    \item[Sistemas de arquivos] NTFS, APFS e ext4 usam Árvores B/B+ para
-      diretórios e localização de blocos.
-    \item[NoSQL / embarcado] LevelDB, RocksDB e SQLite.
-  \end{description}
-  \vspace{0.3em}
-  \footnotesize\alert{Aplicação que adotaríamos:} o índice de um SGBD próprio ---
-  exatamente o cenário deste trabalho (registros de tamanho fixo, 1 nó por acesso).
-\end{frame}
-
 % ===== Slide 10: Conclusao e Referencias ====================================
-\begin{frame}{Conclusão e Referências (Slide 10)}
+\begin{frame}{Conclusão e Referências}
   \begin{itemize}
     \item \textbf{Ordem $M$ reduz acessos e altura:} para $10^6$ chaves,
       \texttt{avg\_reads} cai de \alert{20,95 ($M{=}3$)} para \alert{2,50
       ($M{=}1000$)} e a altura de \alert{19 para 3} níveis.
-    \item \textbf{CPU vs I/O:} $M$ pequeno é \alert{limitado por I/O} e o mais
-      lento ($M{=}3$/$10^6 \approx 16,9$\,s, $t_{io}\,14,2$\,s); ótimo em
-      $\sim$\,$M{=}100$--$500$; $M$ muito grande volta a subir (CPU).
+    \item \textbf{CPU vs.\ I/O (com a ressalva do cache):} os tempos da bateria são
+      servidos pelo \alert{page cache} (o \texttt{.dat} cabe na RAM; device NVMe), não
+      pela mecânica do disco. Forçando I/O real por \texttt{cgroup}, só a inserção
+      \alert{aleatória} (baixa localidade) paga disco --- a \alert{contagem de acessos}
+      (métrica lógica, independente da máquina) continua sendo o resultado robusto.
     \item \textbf{Reuso de nós economiza $\approx$33\%} de ocupação do arquivo.
-    \item \textbf{Robustez:} contador de I/O agora falha alto (\texttt{throw} se
-      o arquivo não abre); \texttt{tmp/} é criado antes de medir.
     \item \textbf{Conformidade:} I/O estritamente 1 nó por vez (1 seek + 1 struct).
   \end{itemize}
   \vspace{0.2em}

@@ -70,6 +70,39 @@ done
 echo "Comparação de reuso gravada em '$REUSE_FILE'."
 
 # -------------------------------------------------------------------------
+# [+] Experimento de I/O REAL (opção 2): page cache vs. dispositivo.
+# Os tempos da bateria acima são servidos pelo page cache do SO — o .dat de
+# N=10^6 (11-36 MB) cabe inteiro na RAM —, então NÃO refletem o disco físico.
+# Aqui re-medimos N=10^6 sob um cgroup com MemoryMax baixo (systemd-run --user,
+# cgroup v2, sem root), que limita o page cache do PROCESSO e força as
+# leituras/escritas a baterem no dispositivo real (NVMe). Compara o modo
+# 'cacheado' (sem limite) com 'restrito' (com cgroup). As métricas lógicas
+# (reads/writes/bytes/altura) são idênticas entre os modos — só o tempo muda,
+# e só o padrão de baixa localidade (Rand) é punido (Seq tem localidade alta).
+# -------------------------------------------------------------------------
+# MemoryHigh (limite SOFT) estrangula o processo e força eviction do page cache
+# perto de 8 MB -> I/O real no dispositivo, SEM OOM-kill (ao contrário de
+# MemoryMax, que mata sob pressão de páginas sujas). MemoryMax=64M é só um teto
+# rígido de segurança, bem acima do RSS anônimo (~5 MB) do binário.
+MEM_HIGH="8M"   # < tamanho de qualquer .dat de N=10^6 (11-36 MB) => força I/O real
+IO_FILE="data/resultados_io_real.csv"
+if command -v systemd-run >/dev/null 2>&1 && \
+   [ "$(stat -fc %T /sys/fs/cgroup 2>/dev/null)" = "cgroup2fs" ]; then
+    echo "[+] Experimento de I/O real (cgroup MemoryHigh=$MEM_HIGH): cacheado vs. restrito..."
+    echo "M,numKeys,tipo,reads,writes,avg_reads,avg_writes,tempo_total,tempo_cpu,tempo_io,bytes,altura,modo" > "$IO_FILE"
+    for m in "${ORDENS[@]}"; do
+        for tipo in 1 0; do
+            echo "$(./main.exe --experiment "$m" 1000000 "$tipo"),cacheado" >> "$IO_FILE"
+            echo "$(systemd-run --user --scope -q -p MemoryHigh="$MEM_HIGH" -p MemoryMax=64M \
+                    -p MemorySwapMax=0 ./main.exe --experiment "$m" 1000000 "$tipo" 2>/dev/null),restrito" >> "$IO_FILE"
+        done
+    done
+    echo "I/O real gravado em '$IO_FILE'."
+else
+    echo "AVISO: systemd-run/cgroup v2 indisponível — pulando experimento de I/O real (opção 2)."
+fi
+
+# -------------------------------------------------------------------------
 # [5/5] Sanidade: alerta se alguma linha tem bytes=0 (assinatura de falha de
 # I/O silenciosa — ex.: diretório tmp/ ausente).
 # -------------------------------------------------------------------------
