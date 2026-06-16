@@ -59,26 +59,28 @@ public:
 * ------------------------------------------------------------------------- */
 template <int M>
 BTree<M>::BTree(const std::string& fname) : filename(fname), disk(fname) {
-    
-    // Manda abrir o arquivo para 
+
+    // Tenta abrir o arquivo existente para leitura e escrita (modo binário).
     file.open(filename, std::ios::in | std::ios::out | std::ios::binary);
 
-
     if (!file.is_open()) {
+        // Arquivo não existe: cria-o vazio e reabre para leitura/escrita.
         file.clear();
         file.open(filename, std::ios::out | std::ios::binary);
         file.close();
         file.open(filename, std::ios::in | std::ios::out | std::ios::binary);
 
-        BTreeNode<M> headerNode; 
+        // Registro 0 é o cabeçalho: A[0] = id da raiz, A[1] = topo da lixeira.
+        BTreeNode<M> headerNode;
         headerNode.A[0] = 0;
         headerNode.A[1] = 0;
         writeNode(0, headerNode);
 
-        rootID = 0; 
+        rootID = 0;  // árvore vazia
     } else {
+        // Arquivo já existe: lê o cabeçalho para recuperar o id da raiz.
         BTreeNode<M> headerNode;
-        readNode(0, headerNode); 
+        readNode(0, headerNode);
         rootID = headerNode.A[0];
     }
 }
@@ -90,6 +92,7 @@ BTree<M>::~BTree() {
     }
 }
 
+// Escreve um nó no registro 'id' do arquivo (cada registro = 1 BTreeNode<M>).
 template <int M>
 void BTree<M>::writeNode(int id, BTreeNode<M>& node) {
     disk.startTimer();
@@ -103,6 +106,7 @@ void BTree<M>::writeNode(int id, BTreeNode<M>& node) {
     disk.incrementWrite(); 
 }
 
+// Lê o nó do registro 'id' do arquivo para 'node'.
 template <int M>
 void BTree<M>::readNode(int id, BTreeNode<M>& node) {
     disk.startTimer();
@@ -117,6 +121,8 @@ void BTree<M>::readNode(int id, BTreeNode<M>& node) {
     disk.incrementRead(); 
 }
 
+// Reserva um id de registro para um novo nó. Reaproveita nós livres (lixeira)
+// quando houver; caso contrário, cresce o arquivo no fim.
 template <int M>
 int BTree<M>::allocateNode() {
     BTreeNode<M> header;
@@ -143,6 +149,8 @@ int BTree<M>::allocateNode() {
     return (int)(endPos / sizeof(BTreeNode<M>));
 }
 
+// Marca o nó 'id' como livre, empilhando-o na lixeira (lista encadeada pelo A[0]
+// dos nós livres, com o topo guardado no A[1] do cabeçalho).
 template <int M>
 void BTree<M>::freeNode(int id) {
     BTreeNode<M> header;
@@ -158,70 +166,82 @@ void BTree<M>::freeNode(int id) {
     writeNode(0, header);
 }
 
+// Busca uma chave descendo da raiz até uma folha. Cada nível custa um readNode.
 template <int M>
 bool BTree<M>::search(int key) {
-    int currentID = rootID; 
+    int currentID = rootID;
 
     while (currentID != 0) {
         BTreeNode<M> currentNode;
-        readNode(currentID, currentNode); 
+        readNode(currentID, currentNode);
 
+        // Acha onde a chave estaria neste nó.
         int i = currentNode.findIndex(key);
 
+        // Chave encontrada neste nó.
         if (i > 0 && currentNode.K[i] == key) {
-            return true; 
+            return true;
         }
 
+        // Nó folha (sem filhos) e não achou => a chave não existe.
         if (currentNode.A[0] == 0) {
             return false;
         }
 
+        // Desce para o filho apropriado.
         currentID = currentNode.A[i];
     }
     return false;
 }
 
+// Insere uma chave. Sempre insere numa folha; se a folha estourar, chama split().
 template <int M>
 void BTree<M>::insert(int key) {
+    // Árvore vazia: cria a raiz com a única chave e atualiza o cabeçalho.
     if (rootID == 0) {
         rootID = allocateNode();
-        
+
         BTreeNode<M> root;
         root.numKeys = 1;
-        root.K[1] = key; 
-        
+        root.K[1] = key;
+
         writeNode(rootID, root);
 
         BTreeNode<M> headerNode;
         readNode(0, headerNode);
         headerNode.A[0] = rootID;
         writeNode(0, headerNode);
-        
-        return; 
+
+        return;
     }
 
-    std::vector<int> path; 
+    // path guarda o caminho da raiz até a folha (usado pelo split para subir).
+    std::vector<int> path;
     int currentID = rootID;
     BTreeNode<M> currentNode;
 
+    // Desce até a folha, registrando o caminho.
     while (currentID != 0) {
         readNode(currentID, currentNode);
-        
+
         int i = currentNode.findIndex(key);
 
+        // Chave já existe: insert é no-op (sem duplicatas).
         if (i > 0 && currentNode.K[i] == key) {
             return;
         }
 
-        path.push_back(currentID); 
+        path.push_back(currentID);
 
+        // Chegou numa folha: para de descer.
         if (currentNode.A[0] == 0) {
             break;
         }
 
-        currentID = currentNode.A[i]; 
+        currentID = currentNode.A[i];
     }
 
+    // Abre espaço na folha empurrando as chaves maiores uma posição à direita.
     int i = currentNode.numKeys;
     while (i > 0 && currentNode.K[i] > key) {
         currentNode.K[i + 1] = currentNode.K[i];
@@ -229,12 +249,14 @@ void BTree<M>::insert(int key) {
         i--;
     }
 
+    // Insere a chave na posição encontrada (filho à direita = 0, é folha).
     currentNode.K[i + 1] = key;
-    currentNode.A[i + 1] = 0; 
+    currentNode.A[i + 1] = 0;
     currentNode.numKeys++;
 
-    writeNode(currentID, currentNode); 
+    writeNode(currentID, currentNode);
 
+    // Estouro (numKeys == M): precisa dividir o nó.
     if (currentNode.numKeys == M) {
         split(path);
     }
@@ -318,16 +340,20 @@ void BTree<M>::split(std::vector<int>& path) {
     }
 }
 
+// Mínimo de chaves que um nó (exceto a raiz) deve ter: ceil(M/2) - 1.
 template <int M>
 int BTree<M>::minKeys() const {
     return ((M + 1) / 2) - 1;
 }
 
+// Um nó é folha quando não tem o primeiro filho (A[0] == 0).
 template <int M>
 bool BTree<M>::isLeaf(const BTreeNode<M>& node) const {
     return node.A[0] == 0;
 }
 
+// Remove a chave na posição keyIndex de uma folha, deslocando as seguintes
+// para a esquerda e limpando o último slot.
 template <int M>
 void BTree<M>::removeFromLeaf(BTreeNode<M>& node, int keyIndex) {
     for (int i = keyIndex; i < node.numKeys; i++) {
@@ -339,6 +365,8 @@ void BTree<M>::removeFromLeaf(BTreeNode<M>& node, int keyIndex) {
     node.numKeys--;
 }
 
+// Predecessor em ordem: maior chave da subárvore — desce sempre pelo filho mais
+// à direita até chegar numa folha.
 template <int M>
 int BTree<M>::getPredecessorKey(int nodeID) {
     int currentID = nodeID;
@@ -353,6 +381,8 @@ int BTree<M>::getPredecessorKey(int nodeID) {
     }
 }
 
+// Sucessor em ordem: menor chave da subárvore — desce sempre pelo filho mais à
+// esquerda até chegar numa folha.
 template <int M>
 int BTree<M>::getSuccessorKey(int nodeID) {
     int currentID = nodeID;
@@ -367,6 +397,8 @@ int BTree<M>::getSuccessorKey(int nodeID) {
     }
 }
 
+// Empréstimo do irmão da esquerda: rotação à direita pelo pai.
+// A chave do pai desce para o filho e a maior chave do irmão sobe para o pai.
 template <int M>
 void BTree<M>::borrowFromLeft(BTreeNode<M>& parent, int parentID, int childIndex) {
     int childID = parent.A[childIndex];
@@ -377,6 +409,7 @@ void BTree<M>::borrowFromLeft(BTreeNode<M>& parent, int parentID, int childIndex
     readNode(childID, child);
     readNode(leftID, left);
 
+    // Abre espaço no início do filho (chave + ponteiro entram à esquerda).
     for (int i = child.numKeys; i >= 1; i--) {
         child.K[i + 1] = child.K[i];
     }
@@ -384,10 +417,12 @@ void BTree<M>::borrowFromLeft(BTreeNode<M>& parent, int parentID, int childIndex
         child.A[i + 1] = child.A[i];
     }
 
+    // Chave do pai desce para o filho; ponteiro mais à direita do irmão vem junto.
     child.K[1] = parent.K[childIndex];
     child.A[0] = left.A[left.numKeys];
     child.numKeys++;
 
+    // Maior chave do irmão esquerdo sobe para o pai; remove-a do irmão.
     parent.K[childIndex] = left.K[left.numKeys];
     left.K[left.numKeys] = 0;
     left.A[left.numKeys] = 0;
@@ -398,6 +433,8 @@ void BTree<M>::borrowFromLeft(BTreeNode<M>& parent, int parentID, int childIndex
     writeNode(parentID, parent);
 }
 
+// Empréstimo do irmão da direita: rotação à esquerda pelo pai.
+// A chave do pai desce para o filho e a menor chave do irmão sobe para o pai.
 template <int M>
 void BTree<M>::borrowFromRight(BTreeNode<M>& parent, int parentID, int childIndex) {
     int childID = parent.A[childIndex];
@@ -408,12 +445,15 @@ void BTree<M>::borrowFromRight(BTreeNode<M>& parent, int parentID, int childInde
     readNode(childID, child);
     readNode(rightID, right);
 
+    // Chave do pai desce para o fim do filho; primeiro ponteiro do irmão vem junto.
     child.numKeys++;
     child.K[child.numKeys] = parent.K[childIndex + 1];
     child.A[child.numKeys] = right.A[0];
 
+    // Menor chave do irmão direito sobe para o pai.
     parent.K[childIndex + 1] = right.K[1];
 
+    // Desloca as chaves/ponteiros restantes do irmão uma posição à esquerda.
     for (int i = 1; i < right.numKeys; i++) {
         right.K[i] = right.K[i + 1];
     }
@@ -430,6 +470,8 @@ void BTree<M>::borrowFromRight(BTreeNode<M>& parent, int parentID, int childInde
     writeNode(parentID, parent);
 }
 
+// Funde dois filhos vizinhos num só: o filho esquerdo recebe a chave separadora
+// do pai e todo o conteúdo do filho direito. O filho direito é liberado.
 template <int M>
 void BTree<M>::mergeChildren(BTreeNode<M>& parent, int parentID, int leftChildIndex) {
     int leftID = parent.A[leftChildIndex];
@@ -440,16 +482,19 @@ void BTree<M>::mergeChildren(BTreeNode<M>& parent, int parentID, int leftChildIn
     readNode(leftID, left);
     readNode(rightID, right);
 
+    // Chave separadora do pai desce para o fim do filho esquerdo.
     left.numKeys++;
     left.K[left.numKeys] = parent.K[leftChildIndex + 1];
     left.A[left.numKeys] = right.A[0];
 
+    // Copia todas as chaves/ponteiros do filho direito para o esquerdo.
     for (int i = 1; i <= right.numKeys; i++) {
         left.numKeys++;
         left.K[left.numKeys] = right.K[i];
         left.A[left.numKeys] = right.A[i];
     }
 
+    // Remove do pai a chave separadora e o ponteiro para o filho direito.
     for (int i = leftChildIndex + 1; i < parent.numKeys; i++) {
         parent.K[i] = parent.K[i + 1];
     }
@@ -463,19 +508,25 @@ void BTree<M>::mergeChildren(BTreeNode<M>& parent, int parentID, int leftChildIn
 
     writeNode(leftID, left);
     writeNode(parentID, parent);
-    freeNode(rightID);
+    freeNode(rightID);  // devolve o nó direito à lixeira para reuso
 }
 
+// Remoção recursiva de uma chave a partir do nó nodeID. Retorna true se removeu.
 template <int M>
 bool BTree<M>::removeRecursive(int nodeID, int key) {
+    // Após mexer num filho, garante que ele ainda tenha o mínimo de chaves.
+    // Se ficou com chaves de menos (underflow), tenta emprestar de um irmão;
+    // se nenhum pode emprestar, funde com um irmão.
     auto rebalanceChildIfNeeded = [&](int parentID, int childIndex) {
         BTreeNode<M> parent;
         readNode(parentID, parent);
 
+        // Pai virou folha (sem filhos): nada a rebalancear.
         if (parent.A[0] == 0) {
             return;
         }
 
+        // Após um merge o índice pode ter saído do intervalo válido.
         if (childIndex > parent.numKeys) {
             childIndex = parent.numKeys;
         }
@@ -484,12 +535,14 @@ bool BTree<M>::removeRecursive(int nodeID, int key) {
         BTreeNode<M> child;
         readNode(childID, child);
 
+        // Filho está dentro do mínimo: nada a fazer.
         if (child.numKeys >= minKeys()) {
             return;
         }
 
         bool fixed = false;
 
+        // 1ª opção: emprestar do irmão esquerdo, se ele tiver chave sobrando.
         if (childIndex > 0) {
             BTreeNode<M> leftSibling;
             readNode(parent.A[childIndex - 1], leftSibling);
@@ -499,6 +552,7 @@ bool BTree<M>::removeRecursive(int nodeID, int key) {
             }
         }
 
+        // 2ª opção: emprestar do irmão direito.
         if (!fixed && childIndex < parent.numKeys) {
             BTreeNode<M> rightSibling;
             readNode(parent.A[childIndex + 1], rightSibling);
@@ -508,6 +562,7 @@ bool BTree<M>::removeRecursive(int nodeID, int key) {
             }
         }
 
+        // 3ª opção: nenhum irmão pode emprestar => funde com um deles.
         if (!fixed) {
             if (childIndex < parent.numKeys) {
                 mergeChildren(parent, parentID, childIndex);
@@ -520,16 +575,20 @@ bool BTree<M>::removeRecursive(int nodeID, int key) {
     BTreeNode<M> node;
     readNode(nodeID, node);
 
+    // Procura a chave neste nó.
     int i = node.findIndex(key);
     bool found = (i > 0 && node.K[i] == key);
 
     if (found) {
+        // Caso 1: a chave está numa folha — remove diretamente.
         if (isLeaf(node)) {
             removeFromLeaf(node, i);
             writeNode(nodeID, node);
             return true;
         }
 
+        // Caso 2: chave em nó interno — substitui pelo predecessor/sucessor e
+        // remove esse substituto recursivamente da subárvore correspondente.
         int leftChildID = node.A[i - 1];
         int rightChildID = node.A[i];
 
@@ -538,6 +597,7 @@ bool BTree<M>::removeRecursive(int nodeID, int key) {
         readNode(leftChildID, leftChild);
         readNode(rightChildID, rightChild);
 
+        // Filho esquerdo tem folga: usa o predecessor (maior chave à esquerda).
         if (leftChild.numKeys > minKeys()) {
             int pred = getPredecessorKey(leftChildID);
             node.K[i] = pred;
@@ -549,6 +609,7 @@ bool BTree<M>::removeRecursive(int nodeID, int key) {
             return removed;
         }
 
+        // Senão, filho direito tem folga: usa o sucessor (menor chave à direita).
         if (rightChild.numKeys > minKeys()) {
             int succ = getSuccessorKey(rightChildID);
             node.K[i] = succ;
@@ -560,14 +621,17 @@ bool BTree<M>::removeRecursive(int nodeID, int key) {
             return removed;
         }
 
+        // Ambos no mínimo: funde os dois filhos e remove a chave do nó fundido.
         mergeChildren(node, nodeID, i - 1);
         return removeRecursive(node.A[i - 1], key);
     }
 
+    // Chave não está aqui e isto é folha => a chave não existe.
     if (isLeaf(node)) {
         return false;
     }
 
+    // Desce para o filho onde a chave estaria e rebalanceia ao voltar.
     int childIndex = i;
     int childID = node.A[childIndex];
     bool removed = removeRecursive(childID, key);
@@ -578,8 +642,10 @@ bool BTree<M>::removeRecursive(int nodeID, int key) {
     return removed;
 }
 
+// Remove uma chave da árvore e, se necessário, ajusta a altura (raiz vazia).
 template <int M>
 void BTree<M>::remove(int key) {
+    // Árvore vazia: nada a remover.
     if (rootID == 0) {
         return;
     }
@@ -593,15 +659,18 @@ void BTree<M>::remove(int key) {
     BTreeNode<M> root;
     readNode(rootID, root);
 
+    // Raiz ficou sem chaves após a remoção: a árvore encolhe um nível.
     if (root.numKeys == 0) {
         int oldRootID = rootID;
 
+        // Se a raiz era folha, a árvore fica vazia; senão, o único filho vira raiz.
         if (root.A[0] == 0) {
             rootID = 0;
         } else {
             rootID = root.A[0];
         }
 
+        // Atualiza o cabeçalho e libera a raiz antiga.
         BTreeNode<M> header;
         readNode(0, header);
         header.A[0] = rootID;

@@ -30,15 +30,18 @@
  * ------------------------------------------------------------------------- */
 template <int M>
 void runExperiment(int numKeys, bool sequential) {
+    // Começa sempre de um arquivo limpo para não contaminar as medições.
     std::remove("tmp/experiment_btree.dat");
     BTree<M> tree("tmp/experiment_btree.dat");
 
+    // Zera os contadores de I/O antes de medir.
     auto& disk = tree.getDiskManager();
     disk.resetCounters();
     disk.resetIoTime();
 
     auto start_time = std::chrono::high_resolution_clock::now();
 
+    // Insere numKeys chaves: sequenciais (i) ou aleatórias (rand()).
     for (int i = 0; i < numKeys; i++) {
         int key = sequential ? i : rand();
         tree.insert(key);
@@ -47,13 +50,15 @@ void runExperiment(int numKeys, bool sequential) {
     auto end_time = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> diff_total = end_time - start_time;
     double total_time = diff_total.count();
-    double io_time = disk.getIoTime(); 
-    double cpu_time = total_time - io_time; 
+    double io_time = disk.getIoTime();
+    double cpu_time = total_time - io_time;  // tempo de CPU = total - I/O
 
+    // Médias por operação de inserção.
     double avg_reads_per_op = static_cast<double>(disk.getReadCount()) / numKeys;
     double avg_writes_per_op = static_cast<double>(disk.getWriteCount()) / numKeys;
 
-    std::cout << M << "," 
+    // Imprime uma linha CSV com todos os resultados.
+    std::cout << M << ","
               << numKeys << "," 
               << (sequential ? "Seq" : "Rand") << ","
               << disk.getReadCount() << "," 
@@ -158,8 +163,11 @@ std::string capturarStats(BTree<M>& tree) {
     return oss.str();
 }
 
+// Loop principal do modo interativo para uma árvore de ordem M: lê a opção do
+// menu, executa a operação e guarda o texto do resultado para a próxima tela.
 template <int M>
 void iniciarMenu() {
+    // Cada ordem M usa seu próprio arquivo .dat persistente.
     std::string filename = "tmp/interactive_btree_m" + std::to_string(M) + ".dat";
     BTree<M> tree(filename);
 
