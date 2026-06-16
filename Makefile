@@ -2,9 +2,10 @@
 # Makefile da implementação da árvore B
 #
 # Alvos:
-#   make         Compila main.exe (alvo padrão).
-#   make run     Compila se necessário, garante que tmp/ exista e roda main.exe.
-#   make clean   Remove main.exe, arquivos-objeto e tmp/.
+#   make                 Compila main.exe (alvo padrão).
+#   make run             Compila se necessário, garante que tmp/ exista e roda main.exe.
+#   make run_experiments Roda a bateria de experimentos (run_experiments.sh).
+#   make clean           Remove main.exe, arquivos-objeto e tmp/.
 # ---------------------------------------------------------------------------
 
 # Compilador e flags.
@@ -27,7 +28,7 @@ TMP_DIR  := tmp
 TEST_SRC := tests/test_btree.cpp
 TEST_BIN := $(TMP_DIR)/test_btree.exe
 
-.PHONY: all run test clean
+.PHONY: all run run_experiments test clean
 
 all: $(TARGET)
 
@@ -39,6 +40,11 @@ $(TARGET): $(OBJ)
 
 run: $(TARGET) | $(TMP_DIR)
 	./$(TARGET)
+
+# A própria run_experiments.sh já faz `make clean && make`, então o alvo apenas
+# delega para o script (sem depender de $(TARGET) para não recompilar à toa).
+run_experiments:
+	./run_experiments.sh
 
 test: $(TEST_SRC) $(HEADERS) | $(TMP_DIR)
 	$(CXX) $(CXXFLAGS) -o $(TEST_BIN) $(TEST_SRC)

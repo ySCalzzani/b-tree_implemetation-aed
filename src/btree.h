@@ -183,7 +183,6 @@ bool BTree<M>::search(int key) {
 
 template <int M>
 void BTree<M>::insert(int key) {
-    // Adicionar comentários de compreensão do código
     if (rootID == 0) {
         rootID = allocateNode();
         
@@ -243,7 +242,6 @@ void BTree<M>::insert(int key) {
 
 template <int M>
 void BTree<M>::split(std::vector<int>& path) {
-    // Adicionar comentários de compreensão do código
     // Lógica de particionamento do nó cheio
     // Encontra o meio do nó
     int mid = (M + 1) / 2;          // para M=3: mid=2 → K[2] é a mediana
