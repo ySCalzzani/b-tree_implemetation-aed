@@ -4,6 +4,9 @@
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <vector>
+#include <stdexcept>
 
 #include "btree.h"
 #include "display/display.h"
@@ -26,10 +29,13 @@
  * - tempo_total : Tempo total gasto para realizar as inserções, em segundos.
  * - tempo_cpu   : Tempo de processamento (CPU) isolado, em segundos.
  * - tempo_io    : Tempo de espera gasto exclusivamente com operações de I/O, em segundos.
- * - bytes       : Tamanho final do arquivo de dados em bytes após as inserções. 
+ * - bytes       : Tamanho final do arquivo de dados em bytes após as inserções.
+ * - altura      : Número de níveis da árvore após as inserções.
  * ------------------------------------------------------------------------- */
 template <int M>
 void runExperiment(int numKeys, bool sequential) {
+    // Garante o diretório de saída: sem ele o fstream falharia em silêncio.
+    std::filesystem::create_directories("tmp");
     // Começa sempre de um arquivo limpo para não contaminar as medições.
     std::remove("tmp/experiment_btree.dat");
     BTree<M> tree("tmp/experiment_btree.dat");
@@ -48,27 +54,119 @@ void runExperiment(int numKeys, bool sequential) {
     }
 
     auto end_time = std::chrono::high_resolution_clock::now();
+
+    // Captura as métricas de I/O ANTES de medir a altura: getHeight() faz
+    // leituras extras que não devem entrar nas contagens das inserções.
+    long reads = disk.getReadCount();
+    long writes = disk.getWriteCount();
+    double io_time = disk.getIoTime();
+    long bytes = disk.getFileSize();
+
     std::chrono::duration<double> diff_total = end_time - start_time;
     double total_time = diff_total.count();
-    double io_time = disk.getIoTime();
     double cpu_time = total_time - io_time;  // tempo de CPU = total - I/O
+    double avg_reads_per_op = static_cast<double>(reads) / numKeys;
+    double avg_writes_per_op = static_cast<double>(writes) / numKeys;
 
-    // Médias por operação de inserção.
-    double avg_reads_per_op = static_cast<double>(disk.getReadCount()) / numKeys;
-    double avg_writes_per_op = static_cast<double>(disk.getWriteCount()) / numKeys;
+    int altura = tree.getHeight();
+
+    // Salvaguarda: arquivo de 0 bytes após inserir chaves indica falha de I/O.
+    if (bytes == 0 && numKeys > 0) {
+        std::cerr << "ERRO: arquivo de 0 bytes apos inserir " << numKeys
+                  << " chaves (tmp/ ausente ou falha de I/O).\n";
+        std::exit(2);
+    }
 
     // Imprime uma linha CSV com todos os resultados.
     std::cout << M << ","
-              << numKeys << "," 
+              << numKeys << ","
               << (sequential ? "Seq" : "Rand") << ","
-              << disk.getReadCount() << "," 
-              << disk.getWriteCount() << "," 
+              << reads << ","
+              << writes << ","
               << avg_reads_per_op << ","
               << avg_writes_per_op << ","
-              << total_time << "," 
-              << cpu_time << "," 
+              << total_time << ","
+              << cpu_time << ","
               << io_time << ","
-              << disk.getFileSize() << "\n";
+              << bytes << ","
+              << altura << "\n";
+}
+
+/* ----------------------------------------------------------------------------
+ * runReuseExperiment
+ * Mede o impacto do REAPROVEITAMENTO de nós sobre a ocupação do arquivo, em três
+ * fases: (1) insere numKeys chaves; (2) remove a primeira metade — gerando
+ * underflow/merge que liberam nós para a lixeira; (3) insere numKeys/2 chaves
+ * novas. Com reuso ativo, a fase 3 recicla os nós liberados e o arquivo quase
+ * não cresce; com reuso desligado, allocateNode cresce o arquivo sempre. A
+ * coluna 'bytes' final evidencia a economia.
+ * Saída CSV: M,numKeys,tipo,reuso,reads,writes,avg_reads,avg_writes,tempo_total,bytes,altura
+ * ------------------------------------------------------------------------- */
+template <int M>
+void runReuseExperiment(int numKeys, bool sequential, bool reuseEnabled) {
+    std::filesystem::create_directories("tmp");
+    std::remove("tmp/reuse_btree.dat");
+    BTree<M> tree("tmp/reuse_btree.dat");
+    tree.setReuse(reuseEnabled);
+
+    auto& disk = tree.getDiskManager();
+    disk.resetCounters();
+    disk.resetIoTime();
+
+    std::vector<int> keys;
+    keys.reserve(numKeys);
+
+    auto start_time = std::chrono::high_resolution_clock::now();
+
+    // Fase 1: insere numKeys chaves (guardadas para poder removê-las depois).
+    for (int i = 0; i < numKeys; i++) {
+        int key = sequential ? i : rand();
+        keys.push_back(key);
+        tree.insert(key);
+    }
+
+    // Fase 2: remove a primeira metade — libera nós para a lixeira.
+    int half = numKeys / 2;
+    for (int i = 0; i < half; i++) {
+        tree.remove(keys[i]);
+    }
+
+    // Fase 3: insere 'half' chaves novas (faixa acima das já inseridas).
+    int base = sequential ? numKeys : 0;
+    for (int i = 0; i < half; i++) {
+        int key = sequential ? (base + i) : rand();
+        tree.insert(key);
+    }
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+
+    long reads = disk.getReadCount();
+    long writes = disk.getWriteCount();
+    long bytes = disk.getFileSize();
+    int altura = tree.getHeight();
+
+    std::chrono::duration<double> diff_total = end_time - start_time;
+    double total_time = diff_total.count();
+    int ops = numKeys + half + half;
+    double avg_reads = static_cast<double>(reads) / ops;
+    double avg_writes = static_cast<double>(writes) / ops;
+
+    if (bytes == 0 && numKeys > 0) {
+        std::cerr << "ERRO: arquivo de 0 bytes (tmp/ ausente ou falha de I/O).\n";
+        std::exit(2);
+    }
+
+    std::cout << M << ","
+              << numKeys << ","
+              << (sequential ? "Seq" : "Rand") << ","
+              << (reuseEnabled ? "com" : "sem") << ","
+              << reads << ","
+              << writes << ","
+              << avg_reads << ","
+              << avg_writes << ","
+              << total_time << ","
+              << bytes << ","
+              << altura << "\n";
 }
 
 void exibirMenu() {
@@ -257,20 +355,50 @@ int main(int argc, char* argv[]) {
         int numKeys = std::stoi(argv[3]);
         bool sequential = std::stoi(argv[4]) == 1;
 
-        if (m == 3)        runExperiment<3>(numKeys, sequential);
-        else if (m == 4)   runExperiment<4>(numKeys, sequential);
-        else if (m == 5)   runExperiment<5>(numKeys, sequential);
-        else if (m == 10)  runExperiment<10>(numKeys, sequential);
-        else if (m == 50)  runExperiment<50>(numKeys, sequential);
-        else if (m == 100) runExperiment<100>(numKeys, sequential);
-        else if (m == 500) runExperiment<500>(numKeys, sequential);
-        else if (m == 1000) runExperiment<1000>(numKeys, sequential);
-        else std::cerr << "Erro: Ordem nao suportada.\n";
-        
+        try {
+            if (m == 3)        runExperiment<3>(numKeys, sequential);
+            else if (m == 4)   runExperiment<4>(numKeys, sequential);
+            else if (m == 5)   runExperiment<5>(numKeys, sequential);
+            else if (m == 10)  runExperiment<10>(numKeys, sequential);
+            else if (m == 50)  runExperiment<50>(numKeys, sequential);
+            else if (m == 100) runExperiment<100>(numKeys, sequential);
+            else if (m == 500) runExperiment<500>(numKeys, sequential);
+            else if (m == 1000) runExperiment<1000>(numKeys, sequential);
+            else { std::cerr << "Erro: Ordem nao suportada.\n"; return 1; }
+        } catch (const std::exception& e) {
+            std::cerr << "Falha no experimento: " << e.what() << "\n";
+            return 1;
+        }
+        return 0;
+    }
+
+    // Experimento de reaproveitamento: insere, remove metade e reinsere; o último
+    // argumento liga (1) ou desliga (0) o reuso de nós para comparar a ocupação.
+    if (argc == 6 && std::strcmp(argv[1], "--reuse-experiment") == 0) {
+        int m = std::stoi(argv[2]);
+        int numKeys = std::stoi(argv[3]);
+        bool sequential = std::stoi(argv[4]) == 1;
+        bool reuse = std::stoi(argv[5]) == 1;
+
+        try {
+            if (m == 3)        runReuseExperiment<3>(numKeys, sequential, reuse);
+            else if (m == 4)   runReuseExperiment<4>(numKeys, sequential, reuse);
+            else if (m == 5)   runReuseExperiment<5>(numKeys, sequential, reuse);
+            else if (m == 10)  runReuseExperiment<10>(numKeys, sequential, reuse);
+            else if (m == 50)  runReuseExperiment<50>(numKeys, sequential, reuse);
+            else if (m == 100) runReuseExperiment<100>(numKeys, sequential, reuse);
+            else if (m == 500) runReuseExperiment<500>(numKeys, sequential, reuse);
+            else if (m == 1000) runReuseExperiment<1000>(numKeys, sequential, reuse);
+            else { std::cerr << "Erro: Ordem nao suportada.\n"; return 1; }
+        } catch (const std::exception& e) {
+            std::cerr << "Falha no experimento de reuso: " << e.what() << "\n";
+            return 1;
+        }
         return 0;
     }
 
     std::cerr << "Uso Interativo: ./main.exe\n";
     std::cerr << "Uso Experimento: ./main.exe --experiment <ordem_m> <num_chaves> <1_seq|0_rand>\n";
+    std::cerr << "Uso Reuso:       ./main.exe --reuse-experiment <ordem_m> <num_chaves> <1_seq|0_rand> <1_com|0_sem>\n";
     return 1;
 }

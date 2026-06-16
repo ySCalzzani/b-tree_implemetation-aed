@@ -1,0 +1,637 @@
+% =============================================================================
+%  Desenvolvimento de Arvore-B em Memoria Secundaria
+%  Slides Beamer, em pt-br. Estrutura segue o "Modelo de apresentacao PPT" do
+%  enunciado (AED-PG-2026-Trabalho.pdf): 10 slides + alguns extras.
+%
+%  COMPILAR COM pdflatex (mesma toolchain do projeto "IEEE Systematic Review":
+%  mise + tinytex). Duas passadas resolvem TOC/navegacao:
+%     make slides
+%  ou, manualmente:
+%     cd slides && pdflatex apresentacao.tex && pdflatex apresentacao.tex
+%
+%  Dados das tabelas: data/resultados_experimentos.csv e
+%  data/reuso_comparacao.csv (gerados por `make run_experiments`).
+% =============================================================================
+\documentclass[aspectratio=169,11pt]{beamer}
+
+\usetheme{default}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[portuguese]{babel}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\graphicspath{{img/}}
+
+% ---- Paleta: azul do PPTX de referencia (4472C4) ---------------------------
+\definecolor{btblue}{HTML}{4472C4}
+\definecolor{btorange}{HTML}{ED7D31}
+\definecolor{btgray}{HTML}{595959}
+\definecolor{codebg}{HTML}{F4F6FB}
+\definecolor{termbg}{HTML}{1E1E1E}
+\definecolor{termgreen}{HTML}{4EC9B0}
+
+% ---- Visual limpo (estilo metropolis com tema nativo, compila no pdflatex) --
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+\setbeamercolor{frametitle}{bg=btblue,fg=white}
+\setbeamercolor{title}{fg=btblue}
+\setbeamercolor{structure}{fg=btblue}
+\setbeamercolor{block title}{bg=btblue!18,fg=btblue!75!black}
+\setbeamercolor{block body}{bg=btblue!6}
+\setbeamercolor{alerted text}{fg=btblue}
+\setbeamerfont{frametitle}{series=\bfseries}
+\setbeamertemplate{blocks}[rounded][shadow=false]
+\setbeamertemplate{itemize items}[circle]
+
+% Barra de titulo ocupando a largura inteira (look metropolis).
+\setbeamertemplate{frametitle}{%
+  \nointerlineskip%
+  \begin{beamercolorbox}[wd=\paperwidth,sep=9pt]{frametitle}%
+    \usebeamerfont{frametitle}\insertframetitle%
+  \end{beamercolorbox}%
+}
+
+% Slides divisores de secao (metropolis-like).
+\AtBeginSection[]{%
+  \begin{frame}[plain]
+    \centering\vfill
+    {\usebeamercolor[fg]{title}\Large\bfseries\insertsectionhead}
+    \vfill
+  \end{frame}%
+}
+
+% ---- Estilo dos trechos de codigo C++ --------------------------------------
+\lstdefinestyle{cpp}{
+  language=C++,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{btblue}\bfseries,
+  commentstyle=\color{btgray}\itshape,
+  stringstyle=\color{btorange},
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{btblue!40},
+  framexleftmargin=4pt,
+  xleftmargin=6pt,
+  xrightmargin=6pt,
+  showstringspaces=false,
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  aboveskip=4pt,
+  belowskip=2pt,
+}
+\lstset{style=cpp}
+
+% ---- Estilo "terminal" p/ os prints da interface (saida real do main.exe) ---
+\lstdefinestyle{terminal}{
+  basicstyle=\ttfamily\scriptsize\color{white},
+  backgroundcolor=\color{termbg},
+  frame=single,
+  rulecolor=\color{termbg},
+  framexleftmargin=3pt,
+  xleftmargin=5pt,
+  xrightmargin=5pt,
+  showstringspaces=false,
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  aboveskip=4pt,
+  belowskip=2pt,
+}
+
+% ---- Metadados -------------------------------------------------------------
+\title{Desenvolvimento de Árvore-B em Memória Secundária}
+\subtitle{Trabalho de implementação e análise de desempenho}
+\author{Caio Uehara \and Yuri Calzzani \and Igor Felipe}
+\institute{PPGCA --- DCM \\ Algoritmos e Estruturas de Dados \\[2pt]
+  \footnotesize Docente: Prof. Dr. José Augusto Baranauskas}
+\date{}
+
+\begin{document}
+
+% ===== Slide 1: Capa ========================================================
+{
+\setbeamertemplate{footline}{}
+\begin{frame}[plain]
+  \titlepage
+\end{frame}
+}
+
+% ===== Agenda (extra) =======================================================
+\begin{frame}{Agenda}
+  \tableofcontents
+\end{frame}
+
+% ###########################################################################
+\section{Decisões e Arquitetura}
+% ###########################################################################
+
+% ===== Slide 2: Decisoes de implementacao ===================================
+\begin{frame}{Decisões de Implementação (Slide 2)}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Armazenamento da raiz}
+        Mantida de forma \alert{dupla}:
+        \begin{itemize}
+          \item em memória, no atributo \texttt{rootID};
+          \item em disco, no registro \texttt{0} (cabeçalho).
+        \end{itemize}
+        O cabeçalho é reescrito em 4 momentos: \emph{criação}, \emph{split},
+        \emph{colapso} da raiz e \emph{carregamento}.
+      \end{block}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Reaproveitamento de nós --- \alert{sim}}
+        \begin{itemize}
+          \item \textbf{Estrutura:} lista de livres (``lixeira''), topo no
+            \texttt{A[1]} do cabeçalho, encadeada pelo \texttt{A[0]} de cada
+            registro livre.
+          \item \textbf{Como:} \texttt{freeNode()} empilha o nó removido;
+            \texttt{allocateNode()} recicla antes de crescer o arquivo.
+        \end{itemize}
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ===== Armazenamento em disco (extra; reforca o requisito de mem. secundaria)=
+\begin{frame}[fragile]{Armazenamento estritamente em memória secundária}
+  Cada nó é um registro de \alert{tamanho fixo} $(2M+3)\cdot\texttt{sizeof(int)}$,
+  lido/escrito \alert{um por vez} por \emph{seek} + \emph{struct} (sem cache de
+  vários nós em RAM) --- atende ao requisito do enunciado.
+  \begin{lstlisting}
+template <int M>
+struct BTreeNode { int numKeys; int K[M+1]; int A[M+1]; };
+
+file.seekg(id * sizeof(BTreeNode<M>), std::ios::beg); // 1 no
+file.read ((char*)(&node), sizeof(BTreeNode<M>));     // 1 registro
+  \end{lstlisting}
+  \footnotesize Conferência: arquivo de $M{=}3$/1000 chaves = 35\,820 bytes
+  $\div$ 36 bytes-por-nó $=$ 995 registros exatos.
+\end{frame}
+
+% ===== Slide 3: Metodos implementados =======================================
+\begin{frame}{Métodos Implementados (Slide 3)}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.5\textwidth}
+      \begin{block}{\texttt{BTree<M>}}
+        \footnotesize
+        \texttt{search}, \texttt{insert}, \texttt{split}, \texttt{remove},
+        \texttt{removeRecursive}, \texttt{borrowFromLeft/Right},
+        \texttt{mergeChildren}, \texttt{loadFromFile}, \texttt{getHeight}.
+      \end{block}
+      \begin{block}{\texttt{BTreeNode}}
+        \footnotesize
+        \texttt{findIndex(key)} localiza a chave ou o ponto de inserção.
+      \end{block}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{block}{\texttt{DiskManager} (contador de I/O)}
+        \footnotesize
+        \texttt{incrementRead/Write}, \texttt{getReadCount/WriteCount},
+        \texttt{resetCounters}, \texttt{getFileSize}.
+      \end{block}
+      \begin{block}{Módulo \texttt{Display}}
+        \footnotesize
+        \texttt{displayTree}, \texttt{displayLevelOrder}, \texttt{dumpFile},
+        \texttt{displaySearchResult}. \emph{(lógica e visualização separadas.)}
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ###########################################################################
+\section{Demonstração}
+% ###########################################################################
+
+% ===== Print de codigo 1: reaproveitamento de nos ===========================
+\begin{frame}[fragile]{Caso de uso em código: reaproveitamento de nós}
+  A ``lixeira'' do Slide 2 são estes dois métodos (\texttt{src/btree.h}):
+  \begin{lstlisting}[basicstyle=\ttfamily\fontsize{7.6}{8.4}\selectfont]
+// Aloca um no: recicla da lixeira antes de crescer o arquivo.
+int allocateNode() {
+  BTreeNode<M> hdr; readNode(0, hdr);
+  if (reuseEnabled && hdr.A[1] != 0) {     // ha no livre?
+    int id = hdr.A[1];                       // topo da lixeira
+    BTreeNode<M> n; readNode(id, n);
+    hdr.A[1] = n.A[0];                        // desempilha
+    writeNode(0, hdr);
+    return id;                                // reaproveita o registro
+  }
+  file.seekp(0, std::ios::end);               // senao, cresce o .dat
+  return (int)(file.tellp() / sizeof(BTreeNode<M>));
+}
+// Libera um no: empilha-o na lixeira (encadeada pelo A[0]).
+void freeNode(int id) {
+  BTreeNode<M> hdr; readNode(0, hdr);
+  BTreeNode<M> dead; dead.A[0] = hdr.A[1];    // aponta p/ topo antigo
+  writeNode(id, dead);
+  hdr.A[1] = id; writeNode(0, hdr);           // novo topo da lixeira
+}
+  \end{lstlisting}
+\end{frame}
+
+% ===== Print de codigo 2: split em cascata ==================================
+\begin{frame}[fragile]{Caso de uso em código: \emph{split} (o ponto mais difícil)}
+  Quando um nó enche (\texttt{numKeys == M}), ele é dividido e a mediana sobe:
+  \begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
+void split(std::vector<int>& path) {
+  int mid = (M+1)/2, leftID = path.back(); path.pop_back();
+  BTreeNode<M> L; readNode(leftID, L);
+  int rightID = allocateNode(); BTreeNode<M> R;
+  int promo = L.K[mid];                  // mediana promovida
+  R.A[0] = L.A[mid]; R.numKeys = M - mid;
+  for (int k=1; k<=M-mid; k++){ R.K[k]=L.K[mid+k]; R.A[k]=L.A[mid+k]; }
+  L.numKeys = mid - 1;                    // L fica com a metade inferior
+  writeNode(leftID, L); writeNode(rightID, R);
+  if (path.empty()) {                    // raiz dividida -> nova raiz
+    /* aloca nova raiz com 'promo' e atualiza o cabecalho (rec 0) */
+  } else {                               // insere 'promo' no pai...
+    /* ...e, se o pai encher, split(path) recursivo (cascata) */
+  }
+}
+  \end{lstlisting}
+\end{frame}
+
+% ===== Print da interface: sessao real ======================================
+\begin{frame}[fragile]{A interface interativa em ação}
+  \footnotesize Saída \alert{real} do \texttt{./main.exe} ($M{=}3$; inseridas
+  30, 20, 40, 55, 10, 35, 50; opção \emph{4 -- Imprimir árvore}):
+  \lstinputlisting[style=terminal,basicstyle=\ttfamily\fontsize{6.3}{7.1}\selectfont\color{white}]{sessions/sessao_demo.txt}
+\end{frame}
+
+% ===== Print da interface: stats + dump =====================================
+\begin{frame}[fragile]{Estado em disco: estatísticas e \emph{dump} bruto}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.42\textwidth}
+      \footnotesize Contadores de I/O da sessão:
+      \lstinputlisting[style=terminal,basicstyle=\ttfamily\fontsize{6.2}{7}\selectfont\color{white}]{sessions/sessao_stats.txt}
+    \end{column}
+    \begin{column}{0.56\textwidth}
+      \footnotesize Registros físicos do \texttt{.dat}:
+      \lstinputlisting[style=terminal,basicstyle=\ttfamily\fontsize{5.7}{6.6}\selectfont\color{white}]{sessions/sessao_dump.txt}
+    \end{column}
+  \end{columns}
+  \vspace{0.3em}
+  \footnotesize O \texttt{rec 0} é o cabeçalho: \texttt{A[0]} guarda a raiz
+  (aqui \texttt{rec 3}) e \texttt{A[1]}, o topo da lixeira. \alert{1 registro = 1 nó}
+  (144 bytes $\div$ 36 = 4 registros).
+\end{frame}
+
+% ===== Uso do Makefile ======================================================
+\begin{frame}[fragile]{Compilação e execução: o \texttt{Makefile}}
+  Todo o fluxo do projeto é automatizado por alvos do \texttt{make}:
+  \vspace{0.3em}
+  \begin{description}\footnotesize
+    \item[\texttt{make}] compila \texttt{main.exe} (alvo padrão, \texttt{g++ -std=c++17}).
+    \item[\texttt{make run}] garante \texttt{tmp/} e abre o \alert{modo interativo}.
+    \item[\texttt{make test}] compila e roda os \alert{27 testes} (\texttt{tests/test\_btree.cpp}).
+    \item[\texttt{make run\_experiments}] roda a bateria completa $\to$ \texttt{data/*.csv}.
+    \item[\texttt{make graficos}] gera as figuras da análise (\texttt{slides/img/*.png}).
+    \item[\texttt{make sessions}] captura os \emph{prints} reais da interface (\texttt{slides/sessions/*.txt}).
+    \item[\texttt{make slides-assets}] $=$ \texttt{graficos} $+$ \texttt{sessions} (regenera o que o deck inclui).
+    \item[\texttt{make slides}] compila \texttt{slides/apresentacao.pdf} (\texttt{pdflatex}, 2 passadas).
+    \item[\texttt{make clean}] remove binários, \texttt{tmp/} e auxiliares do \LaTeX.
+  \end{description}
+\end{frame}
+
+% ###########################################################################
+\section{Análise Experimental}
+% ###########################################################################
+
+% ===== Slide 4: Analises efetuadas ==========================================
+\begin{frame}{Análises Efetuadas (Slide 4)}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.5\textwidth}
+      \begin{block}{Testes unitários}
+        \footnotesize
+        27 casos (11 \texttt{search}, 7 \texttt{insert}, 9 \texttt{remove}),
+        cada um em processo filho (\texttt{fork}) para isolar \emph{crashes}.
+      \end{block}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{block}{Desempenho --- \alert{70 execuções}}
+        \footnotesize
+        \begin{itemize}
+          \item Ordens $M$: 3, 5, 10, 50, 100, 500, 1000
+          \item Volumes: $10^3$, $10^4$, $5{\cdot}10^4$, $10^5$, \alert{$10^6$}
+          \item Padrões: Sequencial e Aleatório
+        \end{itemize}
+      \end{block}
+    \end{column}
+  \end{columns}
+  \vspace{0.3em}
+  \footnotesize Além disso, um experimento de \emph{churn}
+  (insere $N$ $\to$ remove $N/2$ $\to$ reinsere $N/2$) compara a ocupação do
+  arquivo \alert{com e sem} reaproveitamento de nós.
+\end{frame}
+
+% ===== Testes 1: estrategia / fixtures ======================================
+\begin{frame}[fragile]{Como testamos: oráculo por \emph{fixtures}}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.52\textwidth}
+      \footnotesize
+      \begin{itemize}
+        \item Cada caso roda em um \alert{processo filho} (\texttt{fork}): um
+          \emph{crash} (ex.: \texttt{split} com bug) vira \alert{um único FAIL}
+          em vez de abortar a suíte.
+        \item \textbf{27 casos} cobrindo: \texttt{search} (presente/ausente/vazia),
+          \texttt{insert} (sem split, split, \alert{cascata}, $m{=}5$),
+          \texttt{remove} (folha, \emph{borrow}, \emph{merge}, colapso da raiz, no-op).
+        \item \textbf{Fixtures} em \texttt{tests/fixtures/*.txt}: árvores em texto
+          legível (com comentários) $\Rightarrow$ fáceis de inspecionar e versionar.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \footnotesize Formato da fixture (\texttt{search\_tree.txt}):
+      \begin{lstlisting}[basicstyle=\ttfamily\scriptsize,language=,keywordstyle=]
+root 1
+1  1  2  30 3        # rec1: A0=2 K1=30 A1=3
+2  1  4  20 5
+3  1  6  40 7
+4  2  0  10 0  15 0  # folha [10 15]
+...
+      \end{lstlisting}
+      \scriptsize Linha: \texttt{id numKeys A[0] (K[i] A[i])...}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ===== Testes 2: fluxo loadFromFile -> op -> compareLogical ==================
+\begin{frame}[fragile]{Fluxo de um caso: \texttt{loadFromFile} $\to$ operação $\to$ \texttt{compareLogical}}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.5\textwidth}
+      \footnotesize
+      \begin{enumerate}
+        \item \texttt{loadFromFile} \alert{materializa} a fixture (texto)
+          no arquivo binário \texttt{.dat} --- \emph{before} e \emph{after}.
+        \item A operação (\texttt{insert}/\texttt{remove}) roda no \texttt{fork}
+          sobre o \emph{before}; o destrutor faz \emph{flush} antes do pai ler.
+        \item \texttt{compareLogical} compara o resultado com o \emph{after}.
+      \end{enumerate}
+      \vspace{0.2em}
+      \textbf{Comparação \alert{lógica}:} percorre as duas árvores em paralelo
+      e confere \emph{forma} + \emph{chaves}, \alert{ignorando} ids físicos e
+      nós mortos da lixeira --- um \texttt{remove} pode deixar o arquivo com
+      layout diferente, mas a árvore é a mesma.
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
+pid = fork();
+if (pid == 0) {            // filho
+  BTree<M> t(actual);
+  t.loadFromFile(before);
+  op(t);                   // insert/remove
+  _exit(0);                // dtor: flush
+}
+waitpid(pid, &status, 0);
+if (WIFSIGNALED(status))   // crashou?
+  check(name, false, "crash");
+bool ok = compareLogical<M>(
+            actual, expected, msg);
+check(name, ok, msg);
+      \end{lstlisting}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ===== Slide 5: Metricas utilizadas =========================================
+\begin{frame}{Métricas Utilizadas (Slide 5)}
+  \begin{description}
+    \item[M / numKeys / tipo] Ordem, nº de chaves e padrão (Seq/Rand).
+    \item[reads / writes / avg] Leituras e escritas de nós em disco e a
+      \alert{média por operação} (\texttt{readNode}/\texttt{writeNode}).
+    \item[tempo\_cpu / tempo\_io] Tempo de CPU \emph{separado} do tempo de espera
+      de I/O (\texttt{tempo\_cpu = total $-$ tempo\_io}).
+    \item[bytes] Tamanho final do \texttt{.dat} (\texttt{getFileSize()}) --- ocupação.
+    \item[altura] Nº de níveis da árvore (\texttt{getHeight()}, descendo 1 nó por vez).
+  \end{description}
+  \footnotesize\color{btgray} Obs.: \texttt{avg\_reads} inclui o acesso ao
+  registro 0 (cabeçalho/lixeira) feito a cada alocação.
+\end{frame}
+
+% ===== Slide 6: Tabela de Resultados ========================================
+\begin{frame}{Tabela de Resultados (Slide 6)}
+  \centering\footnotesize
+  Inserção sequencial --- \texttt{data/resultados\_experimentos.csv}
+  \vspace{0.4em}
+  \begin{tabular}{r r c r r r r}
+    \toprule
+    $M$ & $N$ & altura & avg\_reads & $t_{cpu}$(s) & $t_{io}$(s) & bytes \\
+    \midrule
+    3    & $10^3$ & 9  & 10,95 & 0,002 & 0,009  & 35\,820 \\
+    3    & $10^5$ & 16 & 17,69 & 0,23  & 1,20   & 3\,599\,820 \\
+    3    & $10^6$ & 19 & 20,95 & 2,67  & 14,18  & 35\,999\,784 \\
+    100  & $10^6$ & 4  & 3,80  & 1,12  & 3,49   & 16\,571\,296 \\
+    1000 & $10^6$ & 3  & 2,50  & 2,61  & 3,52   & 16\,064\,060 \\
+    \bottomrule
+  \end{tabular}
+  \vspace{0.6em}
+  \begin{itemize}\footnotesize
+    \item $M\!\uparrow \Rightarrow$ \alert{altura $\downarrow$} e \alert{avg\_reads $\downarrow$}
+      (menos acessos a disco por operação).
+    \item Para $M$ pequeno, $t_{io} \gg t_{cpu}$ (operação \alert{limitada por I/O}).
+  \end{itemize}
+\end{frame}
+
+% ===== Slide 6b: Ocupacao com vs sem reuso ==================================
+\begin{frame}{Impacto do Reuso na Ocupação (Slide 6)}
+  \centering\footnotesize
+  Workload: insere $N$ $\to$ remove $N/2$ $\to$ reinsere $N/2$ (Seq) ---
+  \texttt{data/reuso\_comparacao.csv}
+  \vspace{0.4em}
+  \begin{tabular}{r r r r c}
+    \toprule
+    $M$ & $N$ & bytes \emph{com} reuso & bytes \emph{sem} reuso & economia \\
+    \midrule
+    3   & $10^4$ & 359\,856   & 539\,784   & $\approx$33\% \\
+    10  & $10^5$ & 2\,299\,632 & 3\,449\,540 & $\approx$33\% \\
+    100 & $10^5$ & 1\,657\,292 & 2\,485\,532 & $\approx$33\% \\
+    \bottomrule
+  \end{tabular}
+  \vspace{0.6em}
+  \begin{itemize}\footnotesize
+    \item Com reuso, a reinserção recicla os nós liberados; sem reuso, o arquivo
+      cresce sempre $\Rightarrow$ \alert{$\approx$1/3 de economia} de disco.
+  \end{itemize}
+\end{frame}
+
+% ===== Perguntas do enunciado -> respostas ==================================
+\begin{frame}{Perguntas do enunciado $\to$ onde respondemos}
+  \centering\footnotesize
+  \begin{tabular}{p{6.3cm} l}
+    \toprule
+    \textbf{Pergunta experimental} & \textbf{Resposta} \\
+    \midrule
+    Como a ordem $M$ afeta os acessos a disco? & fig.\ \emph{reads}, tabela \\
+    Conjuntos de $10^3$ a $10^6$, Seq e Aleatório & 70 execuções (varredura) \\
+    Nº médio de acessos por operação & \texttt{avg\_reads}, fig.\ \emph{reads} \\
+    Ocupação do arquivo (com e \alert{sem} reuso) & fig.\ \emph{reuso}, fig.\ \emph{ocupação} \\
+    Tempo de execução: CPU \emph{vs.} I/O & fig.\ \emph{trade-off} \\
+    Inserção Sequencial \emph{vs.} Aleatória & fig.\ \emph{reads}/\emph{ocupação} \\
+    Altura da árvore \emph{vs.} $M$ e \emph{vs.} $N$ & fig.\ \emph{altura} \\
+    Existe uma ordem $M$ ótima? & fig.\ \emph{trade-off} ($\sim M{=}100$--$500$) \\
+    \bottomrule
+  \end{tabular}
+  \vspace{0.5em}
+
+  \footnotesize Os gráficos a seguir são gerados de
+  \texttt{data/resultados\_experimentos.csv} por
+  \texttt{analysis/gerar\_graficos.py} (\texttt{make graficos}).
+\end{frame}
+
+% ===== Grafico: acessos vs M ================================================
+\begin{frame}{Acessos a disco {\small$\times$} ordem $M$}
+  \centering
+  \includegraphics[height=0.74\textheight]{fig_reads_vs_m.png}
+
+  \footnotesize $M\!\uparrow \Rightarrow$ menos leituras por operação; a partir de
+  $M{\approx}100$ estabiliza em $\sim$2--3 acessos (árvore mais rasa).
+\end{frame}
+
+% ===== Grafico: altura ======================================================
+\begin{frame}{Altura da árvore {\small($\times M$ e $\times N$)}}
+  \centering
+  \includegraphics[height=0.74\textheight]{fig_altura.png}
+
+  \footnotesize Altura $\propto \log_M N$: cresce devagar com $N$ e cai
+  bruscamente com $M$ (de 19 níveis em $M{=}3$ para 3--4 em $M{\ge}100$, $N{=}10^6$).
+\end{frame}
+
+% ===== Grafico: trade-off ===================================================
+\begin{frame}{Trade-off CPU {\small$\times$} I/O: a ordem ótima}
+  \centering
+  \includegraphics[height=0.74\textheight]{fig_tradeoff.png}
+
+  \footnotesize $M$ pequeno é \alert{limitado por I/O} (mais acessos); $M$ muito
+  grande gasta \alert{CPU} reorganizando nós grandes. Ótimo em $\sim M{=}100$--$500$.
+\end{frame}
+
+% ===== Grafico: ocupacao Seq vs Rand ========================================
+\begin{frame}{Ocupação e padrão de inserção (Seq {\small$\times$} Rand)}
+  \centering
+  \includegraphics[height=0.72\textheight]{fig_ocupacao.png}
+
+  \footnotesize A inserção \alert{aleatória} preenche melhor os nós (arquivo
+  menor); a \alert{sequencial} deixa nós meio-cheios após cada split.
+\end{frame}
+
+% ===== Grafico: reuso com vs sem ============================================
+\begin{frame}{Reuso de nós: ocupação \emph{com} {\small$\times$} \emph{sem}}
+  \centering
+  \includegraphics[height=0.72\textheight]{fig_reuso.png}
+
+  \footnotesize \emph{Workload} de \emph{churn} (insere $N$, remove $N/2$,
+  reinsere $N/2$): reciclar nós liberados economiza \alert{$\approx$1/3} de disco.
+\end{frame}
+
+% ###########################################################################
+\section{Discussão}
+% ###########################################################################
+
+% ===== Slide 7: Utilizacao de IA ============================================
+\begin{frame}{Utilização de IA (Slide 7)}
+  Usamos um assistente de IA como \alert{apoio}, sempre com validação humana e
+  conferência contra os dados e o enunciado. Onde ajudou:
+  \vspace{0.2em}
+  \begin{description}\footnotesize
+    \item[Revisão de código] Revisão crítica que apontou casos de borda ---
+      destaque para a \alert{falha silenciosa de I/O} quando \texttt{tmp/} não
+      existia ($\to$ \texttt{throw} em \texttt{readNode}/\texttt{writeNode} e
+      criação de \texttt{tmp/}).
+    \item[Geração de casos de teste] Sugestão de \emph{fixtures} e cenários
+      (split em cascata, \emph{borrow}/\emph{merge}, colapso da raiz, no-ops)
+      que ampliaram a cobertura para os 27 casos.
+    \item[Comentários e documentação] Apoio na redação de comentários do código,
+      do \texttt{README} e dos cabeçalhos das funções.
+    \item[Revisão dos slides] Conferência da aderência ao modelo do enunciado e
+      da consistência dos números com os CSVs.
+  \end{description}
+  \vspace{0.2em}
+  \footnotesize\color{btgray} Decisões de projeto, implementação e análise
+  permaneceram do grupo; a IA acelerou estudo, revisão e redação.
+\end{frame}
+
+% ===== Slide 8: Dificuldades + Vantagens/Desvantagens =======================
+\begin{frame}{Dificuldades, Vantagens e Desvantagens (Slide 8)}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.34\textwidth}
+      \begin{block}{Dificuldades}
+        \scriptsize
+        \begin{itemize}
+          \item Ponteiros no split/merge
+          \item Persistência do cabeçalho
+          \item \texttt{removeRecursive} (todos os casos)
+          \item Nós órfãos / controle de I/O
+        \end{itemize}
+      \end{block}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{block}{Vantagens}
+        \scriptsize
+        \begin{itemize}
+          \item Altura logarítmica
+          \item Poucos acessos a disco/op.
+          \item Naturalmente balanceada
+          \item Busca por intervalo
+        \end{itemize}
+      \end{block}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{block}{Desvantagens (vs.\ outras)}
+        \scriptsize
+        \begin{itemize}
+          \item vs.\ \textbf{AVL/BST}: mais complexa, custo de split/merge
+          \item vs.\ \textbf{hash}: $O(1)$ ponto, mas \alert{sem ordem/intervalo}
+            e degrada em disco
+        \end{itemize}
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ===== Slide 9: Aplicacoes Praticas =========================================
+\begin{frame}{Aplicações Práticas (Slide 9)}
+  \begin{description}
+    \item[Bancos de dados relacionais] MySQL InnoDB e PostgreSQL usam Árvores B+
+      nos índices para localizar registros em $O(\log n)$ acessos a disco.
+    \item[Sistemas de arquivos] NTFS, APFS e ext4 usam Árvores B/B+ para
+      diretórios e localização de blocos.
+    \item[NoSQL / embarcado] LevelDB, RocksDB e SQLite.
+  \end{description}
+  \vspace{0.3em}
+  \footnotesize\alert{Aplicação que adotaríamos:} o índice de um SGBD próprio ---
+  exatamente o cenário deste trabalho (registros de tamanho fixo, 1 nó por acesso).
+\end{frame}
+
+% ===== Slide 10: Conclusao e Referencias ====================================
+\begin{frame}{Conclusão e Referências (Slide 10)}
+  \begin{itemize}
+    \item \textbf{Ordem $M$ reduz acessos e altura:} para $10^6$ chaves,
+      \texttt{avg\_reads} cai de \alert{20,95 ($M{=}3$)} para \alert{2,50
+      ($M{=}1000$)} e a altura de \alert{19 para 3} níveis.
+    \item \textbf{CPU vs I/O:} $M$ pequeno é \alert{limitado por I/O} e o mais
+      lento ($M{=}3$/$10^6 \approx 16,9$\,s, $t_{io}\,14,2$\,s); ótimo em
+      $\sim$\,$M{=}100$--$500$; $M$ muito grande volta a subir (CPU).
+    \item \textbf{Reuso de nós economiza $\approx$33\%} de ocupação do arquivo.
+    \item \textbf{Robustez:} contador de I/O agora falha alto (\texttt{throw} se
+      o arquivo não abre); \texttt{tmp/} é criado antes de medir.
+    \item \textbf{Conformidade:} I/O estritamente 1 nó por vez (1 seek + 1 struct).
+  \end{itemize}
+  \vspace{0.2em}
+  \footnotesize\textbf{Referências:} CORMEN et al. \emph{Introduction to
+  Algorithms}, 4.\,ed., MIT Press, 2022 (Cap.~18). \,COMER, D. ``The Ubiquitous
+  B-Tree''. \emph{ACM Comp. Surveys}, 1979. \,KNUTH, D. \emph{TAOCP}, v.3.
+\end{frame}
+
+% ===== Encerramento =========================================================
+\begin{frame}[plain]
+  \centering\vspace{1.2cm}
+  {\usebeamercolor[fg]{title}\Huge\bfseries Obrigado!}\\[1.2em]
+  \large Caio Uehara \quad\textbullet\quad Yuri Calzzani \quad\textbullet\quad Igor Felipe
+\end{frame}
+
+\end{document}

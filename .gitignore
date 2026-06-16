@@ -7,3 +7,16 @@ tmp/
 
 .vscode
 .claude
+
+# Artefatos intermediários do LaTeX (o .pdf dos slides é versionado)
+slides/*.aux
+slides/*.log
+slides/*.nav
+slides/*.out
+slides/*.toc
+slides/*.snm
+slides/*.vrb
+
+# As figuras (slides/img/*.png) e os prints da interface (slides/sessions/*.txt)
+# SÃO versionados (como o .pdf), para o deck compilar sem Python/main.exe.
+# Regeneráveis com `make slides-assets`.

@@ -1,0 +1,8 @@
++============== RESULTADO ==============+
+--- Dump bruto do .dat (4 registros, 144 bytes, sizeof(no)=36) ---
+raiz: rec 3
+rec 0 (cabecalho): numKeys=0 | A[0]=3
+rec 1: numKeys=2 | A[0]=0 K[1]=10 A[1]=0 K[2]=20 A[2]=0
+rec 2: numKeys=2 | A[0]=0 K[1]=40 A[1]=0 K[2]=55 A[2]=0
+rec 3: numKeys=1 | A[0]=1 K[1]=30 A[1]=2
++======================================+

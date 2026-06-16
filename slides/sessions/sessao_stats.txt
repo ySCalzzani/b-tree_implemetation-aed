@@ -1,0 +1,6 @@
++============== RESULTADO ==============+
+--- Estatisticas do Disco ---
+Leituras (I/O): 57
+Escritas (I/O): 16
+Tamanho do arq: 180 bytes
++======================================+

@@ -5,7 +5,11 @@
 #   make                 Compila main.exe (alvo padrão).
 #   make run             Compila se necessário, garante que tmp/ exista e roda main.exe.
 #   make run_experiments Roda a bateria de experimentos (run_experiments.sh).
-#   make clean           Remove main.exe, arquivos-objeto e tmp/.
+#   make graficos        Gera as figuras da analise (slides/img/*.png).
+#   make sessions        Captura prints reais da interface (slides/sessions/*.txt).
+#   make slides-assets   = graficos + sessions (tudo que o deck inclui).
+#   make slides          Gera slides/apresentacao.pdf com pdflatex (Beamer).
+#   make clean           Remove main.exe, arquivos-objeto, tmp/ e artefatos LaTeX.
 # ---------------------------------------------------------------------------
 
 # Compilador e flags.
@@ -28,7 +32,20 @@ TMP_DIR  := tmp
 TEST_SRC := tests/test_btree.cpp
 TEST_BIN := $(TMP_DIR)/test_btree.exe
 
-.PHONY: all run run_experiments test clean
+# Slides Beamer. Compilados com pdflatex (mesma toolchain do projeto
+# "IEEE Systematic Review": mise + tinytex). Duas passadas resolvem TOC/nav.
+SLIDES_DIR := slides
+SLIDES_SRC := apresentacao.tex
+LATEX      := pdflatex
+LATEXFLAGS := -interaction=nonstopmode -halt-on-error
+
+# Geracao dos artefatos do deck. As figuras usam so matplotlib+numpy (sem
+# pandas/seaborn), entao roda no .venv do projeto; cai para python3 se nao houver.
+PYTHON     := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
+FIG_SCRIPT := analysis/gerar_graficos.py
+SESS_SCRIPT := slides/capturar_sessao.sh
+
+.PHONY: all run run_experiments test graficos sessions slides-assets slides slides-clean clean
 
 all: $(TARGET)
 
@@ -50,9 +67,38 @@ test: $(TEST_SRC) $(HEADERS) | $(TMP_DIR)
 	$(CXX) $(CXXFLAGS) -o $(TEST_BIN) $(TEST_SRC)
 	./$(TEST_BIN)
 
+# Gera as figuras da analise experimental (slides/img/*.png).
+graficos:
+	$(PYTHON) $(FIG_SCRIPT)
+
+# Captura os prints reais da interface interativa (slides/sessions/*.txt).
+# O proprio script compila main.exe antes de capturar.
+sessions:
+	bash $(SESS_SCRIPT)
+
+# Regenera tudo que o deck inclui (figuras + sessoes). Rode quando os dados ou a
+# interface mudarem; os arquivos gerados sao versionados (como o .pdf).
+slides-assets: graficos sessions
+
+# Gera slides/apresentacao.pdf. Requer pdflatex no PATH (ex.: mise + tinytex,
+# como no projeto "IEEE Systematic Review", ou um TeX Live instalado).
+# Usa as figuras/sessoes ja versionadas; rode `make slides-assets` p/ regenera-las.
+slides:
+	@command -v $(LATEX) >/dev/null 2>&1 || { \
+		echo "ERRO: '$(LATEX)' nao encontrado no PATH."; \
+		echo "Ative a toolchain TeX (ex.: 'mise' com tinytex) e tente de novo."; \
+		exit 1; }
+	cd $(SLIDES_DIR) && $(LATEX) $(LATEXFLAGS) $(SLIDES_SRC)
+	cd $(SLIDES_DIR) && $(LATEX) $(LATEXFLAGS) $(SLIDES_SRC)
+	@echo "Slides gerados em $(SLIDES_DIR)/$(SLIDES_SRC:.tex=.pdf)"
+
+# Remove os artefatos intermediarios do LaTeX (mantem o .pdf).
+slides-clean:
+	rm -f $(addprefix $(SLIDES_DIR)/apresentacao., aux log nav out toc snm vrb)
+
 $(TMP_DIR):
 	mkdir -p $(TMP_DIR)
 
-clean:
+clean: slides-clean
 	rm -f $(TARGET) $(OBJ)
 	rm -rf $(TMP_DIR)

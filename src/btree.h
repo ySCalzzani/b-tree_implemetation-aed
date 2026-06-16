@@ -6,6 +6,7 @@
 #include <sstream>
 #include <vector>
 #include <iostream>
+#include <stdexcept>
 #include "node.h"
 #include "diskmanager.h"
 
@@ -18,8 +19,9 @@ private:
     std::string filename;
     // fstream: classe para manipulação de arquivos, permite leitura e escrita.
     std::fstream file;
-    int rootID; 
+    int rootID;
     DiskManager disk;
+    bool reuseEnabled = true;  // false desliga o reaproveitamento (lixeira)
 
     void writeNode(int id, BTreeNode<M>& node);
     void readNode(int id, BTreeNode<M>& node);
@@ -50,6 +52,11 @@ public:
     // A BTree não imprime nada; apenas expõe a estrutura para percorrê-la.
     int getRoot() const { return rootID; }
     BTreeNode<M> getNode(int id) { BTreeNode<M> n; readNode(id, n); return n; }
+
+    // Altura da árvore (número de níveis). Usada pela análise experimental.
+    int getHeight();
+    // Liga/desliga o reaproveitamento de nós (lixeira). Padrão: ligado.
+    void setReuse(bool enabled) { reuseEnabled = enabled; }
 };
 
 /* ----------------------------------------------------------------------------
@@ -69,6 +76,14 @@ BTree<M>::BTree(const std::string& fname) : filename(fname), disk(fname) {
         file.open(filename, std::ios::out | std::ios::binary);
         file.close();
         file.open(filename, std::ios::in | std::ios::out | std::ios::binary);
+
+        // Sem isto, um diretório ausente (ex.: tmp/) faria o fstream falhar em
+        // silêncio e os contadores subiriam sem I/O real. Falha alto e cedo.
+        if (!file.is_open()) {
+            throw std::runtime_error(
+                "BTree: não consegui abrir/criar '" + filename +
+                "'. O diretório de destino existe? (ex.: tmp/)");
+        }
 
         // Registro 0 é o cabeçalho: A[0] = id da raiz, A[1] = topo da lixeira.
         BTreeNode<M> headerNode;
@@ -103,6 +118,12 @@ void BTree<M>::writeNode(int id, BTreeNode<M>& node) {
     file.write((const char*)(&node), sizeof(BTreeNode<M>));
     file.flush();
     disk.stopTimer();
+    // Só conta a escrita se ela realmente ocorreu — um contador que sobe sem
+    // I/O real produz métricas falsas (ex.: tmp/ ausente).
+    if (!file.good()) {
+        throw std::runtime_error(
+            "BTree::writeNode: falha de I/O no registro " + std::to_string(id));
+    }
     disk.incrementWrite(); 
 }
 
@@ -118,6 +139,12 @@ void BTree<M>::readNode(int id, BTreeNode<M>& node) {
     // (char* -byte puro)(&node)
     file.read((char*)(&node), sizeof(BTreeNode<M>));
     disk.stopTimer();
+    // Só conta a leitura se ela realmente ocorreu. Sem esta checagem, ler de um
+    // arquivo que não abriu devolveria lixo zerado e inflaria o contador.
+    if (!file.good()) {
+        throw std::runtime_error(
+            "BTree::readNode: falha de I/O no registro " + std::to_string(id));
+    }
     disk.incrementRead(); 
 }
 
@@ -128,8 +155,8 @@ int BTree<M>::allocateNode() {
     BTreeNode<M> header;
     readNode(0, header);
 
-    // Verifica se tem lixo para reciclar
-    if (header.A[1] != 0) {
+    // Verifica se tem lixo para reciclar (a menos que o reuso esteja desligado).
+    if (reuseEnabled && header.A[1] != 0) {
         int reusedID = header.A[1];
         
         BTreeNode<M> reusedNode;
@@ -678,6 +705,24 @@ void BTree<M>::remove(int key) {
 
         freeNode(oldRootID);
     }
+}
+
+// Altura da árvore: número de níveis da raiz até uma folha. Desce sempre pelo
+// filho mais à esquerda (A[0]), lendo UM nó por vez (não viola o requisito de
+// operar em memória secundária). Árvore vazia => 0; só com a raiz => 1.
+template <int M>
+int BTree<M>::getHeight() {
+    if (rootID == 0) return 0;
+
+    int height = 0;
+    int currentID = rootID;
+    BTreeNode<M> node;
+    while (currentID != 0) {
+        readNode(currentID, node);
+        height++;
+        currentID = node.A[0];
+    }
+    return height;
 }
 
 /* ----------------------------------------------------------------------------

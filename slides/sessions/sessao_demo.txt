@@ -1,0 +1,23 @@
+=====================================
+               ARVORE B                
+=====================================
+1. Inserir chave
+2. Remover chave
+3. Buscar chave
+4. Imprimir arvore
+5. Estatisticas de I/O
+6. Dump bruto do arquivo .dat
+0. Voltar / Sair
+Escolha uma opcao: 
+
++============== RESULTADO ==============+
+--- Arvore (indentada) ---
+[30 40] (rec 3)
+  [10 20] (rec 1)
+  [35] (rec 2)
+  [50 55] (rec 4)
+
+--- Arvore (por nivel) ---
+Nivel 0: [30 40] (rec 3)  
+Nivel 1: [10 20] (rec 1)  [35] (rec 2)  [50 55] (rec 4)  
++======================================+
